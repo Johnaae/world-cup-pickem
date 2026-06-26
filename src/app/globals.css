@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --card: #0f172a;
+  --border: #1e293b;
+  --primary: #10b981;
+  --primary-hover: #059669;
 }
 
 @theme inline {
@@ -12,15 +16,68 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: linear-gradient(180deg, #020617 0%, #0f172a 50%, #020617 100%);
+  color: var(--foreground);
+  min-height: 100vh;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.card {
+  @apply rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl;
+}
+
+.btn-primary {
+  @apply rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 font-semibold text-slate-200 transition hover:bg-slate-700;
+}
+
+.btn-danger {
+  @apply rounded-xl border border-red-800 bg-red-950 px-4 py-3 font-semibold text-red-300 transition hover:bg-red-900;
+}
+
+.input {
+  @apply w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500;
+}
+
+.label {
+  @apply mb-1 block text-sm font-medium text-slate-400;
+}
+
+.nav-link {
+  @apply text-sm text-slate-400 transition hover:text-white hidden sm:inline;
+}
+
+.section-title {
+  @apply mb-4 text-lg font-bold text-white;
+}
+
+.badge {
+  @apply rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide;
+}
+
+.badge-pending {
+  @apply bg-amber-500/20 text-amber-400;
+}
+
+.badge-live {
+  @apply bg-red-500/20 text-red-400 animate-pulse;
+}
+
+.badge-finished {
+  @apply bg-slate-700 text-slate-300;
+}
+
+.amount-btn {
+  @apply rounded-xl border border-slate-700 bg-slate-800 py-3 font-semibold text-white transition hover:border-slate-500;
+}
+
+.amount-btn-active {
+  @apply border-emerald-500 bg-emerald-500/20;
+}
+
+.hero-gradient {
+  background: radial-gradient(ellipse at top, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
 }

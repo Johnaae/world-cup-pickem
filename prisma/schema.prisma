@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum MatchStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+}
+
+enum PickOutcome {
+  TEAM_A
+  DRAW
+  TEAM_B
+}
+
+enum PickStatus {
+  PENDING
+  WON
+  LOST
+  CANCELLED
+}
+
+enum TransactionType {
+  INITIAL
+  RISK
+  WIN
+  LOSS
+  ADMIN_ADJUSTMENT
+  REFUND
+}
+
+model User {
+  id           String              @id @default(cuid())
+  name         String
+  email        String              @unique
+  passwordHash String
+  role         Role                @default(USER)
+  points       Int                 @default(1000)
+  createdAt    DateTime            @default(now())
+  picks        Pick[]
+  transactions PointsTransaction[]
+}
+
+model Match {
+  id               String      @id @default(cuid())
+  teamA            String
+  teamB            String
+  startTime        DateTime
+  status           MatchStatus @default(UPCOMING)
+  scoreA           Int?
+  scoreB           Int?
+  multiplierTeamA  Float       @default(1.5)
+  multiplierDraw   Float       @default(3.0)
+  multiplierTeamB  Float       @default(2.5)
+  oddsApiId        String?     @unique
+  createdAt        DateTime    @default(now())
+  picks            Pick[]
+}
+
+model Pick {
+  id           String              @id @default(cuid())
+  userId       String
+  matchId      String
+  selectedOutcome PickOutcome
+  pointsRisked Int
+  multiplier   Float
+  status       PickStatus          @default(PENDING)
+  pointsWon    Int?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match        Match               @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  transactions PointsTransaction[]
+
+  @@unique([userId, matchId])
+}
+
+model PointsTransaction {
+  id           String          @id @default(cuid())
+  userId       String
+  pickId       String?
+  type         TransactionType
+  amount       Int
+  balanceAfter Int
+  note         String?
+  createdAt    DateTime        @default(now())
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pick         Pick?           @relation(fields: [pickId], references: [id], onDelete: SetNull)
+}
+
+model AppSettings {
+  id             String    @id @default("default")
+  startingPoints Int       @default(1000)
+  disclaimer     String    @default("For entertainment purposes only. No real-money betting. No payments. No cash prizes. Points have no monetary value.")
+  inviteCode     String    @default("WORLDCUP2026")
+  lastOddsSyncAt DateTime?
+  updatedAt      DateTime  @updatedAt
+}
