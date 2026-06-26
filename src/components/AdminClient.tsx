@@ -7,6 +7,7 @@ import type { MarketType } from "@/lib/markets";
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { AdminSyncButtons } from "./AdminSyncButtons";
+import { QuickScorePanel } from "./QuickScorePanel";
 
 type AdminMatch = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -55,6 +56,7 @@ export function AdminClient({
     }>
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [quickScoreId, setQuickScoreId] = useState<string | null>(null);
 
   async function refresh() {
     const res = await fetch("/api/admin/matches");
@@ -264,6 +266,7 @@ export function AdminClient({
               </div>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setEditingId(editingId === match.id ? null : match.id);
                     setScoreForm({
@@ -283,6 +286,35 @@ export function AdminClient({
                 <button onClick={() => handleDelete(match.id)} className="btn-danger text-sm">{t.admin.delete}</button>
               </div>
             </div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setQuickScoreId(quickScoreId === match.id ? null : match.id)}
+                className="btn-secondary text-xs"
+              >
+                {quickScoreId === match.id ? t.common.cancel : t.admin.quickScoreTitle}
+              </button>
+              <span className="text-xs text-slate-500">
+                {t.matches.score}:{" "}
+                {match.scoreA !== null && match.scoreB !== null
+                  ? `${match.scoreA} - ${match.scoreB}`
+                  : t.matches.scoreUnavailable}
+              </span>
+            </div>
+
+            {quickScoreId === match.id && (
+              <QuickScorePanel
+                match={match}
+                onSaved={async () => {
+                  setQuickScoreId(null);
+                  setMessage(t.admin.saveScore);
+                  setMessageType("success");
+                  await refresh();
+                }}
+                onCancel={() => setQuickScoreId(null)}
+              />
+            )}
 
             <div className="flex flex-wrap gap-2 mb-3">
               <button

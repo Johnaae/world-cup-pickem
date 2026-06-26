@@ -90,6 +90,7 @@ export const vi: Dictionary = {
     score: "Tỷ số",
     scoreUnavailable: "chưa có",
     oddsLastUpdated: "Cập nhật kèo lần cuối",
+    quickScore: "Nhập tỷ số nhanh",
     vs: "VS",
   },
   matchStatus: {
@@ -246,6 +247,11 @@ export const vi: Dictionary = {
     manualSource: "Nhập thủ công",
     apiSource: "Đồng bộ API",
     optionsCount: "{count} cửa",
+    homeScore: "Đội nhà",
+    awayScore: "Đội khách",
+    quickScore: "Tỷ số nhanh",
+    quickScoreTitle: "Nhập tỷ số nhanh",
+    saveScore: "Lưu tỷ số",
     ft: "FT",
     ht: "HT",
     syncSummary: "Nhập {importedMatches} trận, cập nhật {updatedMatches}. Nhập {importedMarkets} kèo, cập nhật {updatedMarkets}.",
@@ -434,6 +440,7 @@ export const vi: Dictionary = {
     ODDS_STALE_UPCOMING: "Kèo đã thay đổi, vui lòng làm mới rồi chọn lại.",
     OPTION_NOT_ACTIVE: "Kèo này đã đóng hoặc tạm khóa.",
     REOPEN_BEFORE_KICKOFF: "Chỉ có thể mở lại kèo trước giờ thi đấu.",
+    API_NO_LIVE_ODDS: "API chưa có kèo live cho trận này. Có thể nhập tay.",
   },
   adminUsers: {
     title: "Quản lý người chơi",

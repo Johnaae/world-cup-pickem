@@ -11,8 +11,9 @@ import {
   getMatchPickButtonState,
   type MatchWithMarkets,
 } from "@/lib/matchPickability";
+import { QuickScorePanel } from "./QuickScorePanel";
 
-type RefreshResult = { ok: boolean; error?: string };
+type RefreshResult = { ok: boolean; error?: string; message?: string };
 
 type MatchCardProps = {
   match: Match & {
@@ -21,7 +22,9 @@ type MatchCardProps = {
   };
   onPick?: () => void;
   onRefreshOdds?: (matchId: string) => Promise<RefreshResult>;
+  onScoreSaved?: () => void;
   showPickButton?: boolean;
+  isAdmin?: boolean;
 };
 
 const statusStyles: Record<MatchStatus, string> = {
@@ -30,21 +33,30 @@ const statusStyles: Record<MatchStatus, string> = {
   FINISHED: "badge-finished",
 };
 
-export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true }: MatchCardProps) {
+export function MatchCard({
+  match,
+  onPick,
+  onRefreshOdds,
+  onScoreSaved,
+  showPickButton = true,
+  isAdmin = false,
+}: MatchCardProps) {
   const { t, locale, fmt } = useI18n();
   const picks = match.picks ?? [];
   const marketCount = match.markets?.length ?? 0;
   const dateLocale = getDateFnsLocale(locale);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [showQuickScore, setShowQuickScore] = useState(false);
 
   const buttonState = getMatchPickButtonState(match as MatchWithMarkets);
   const lastOddsSync = getMatchLastSyncedAt(
     (match.markets ?? []).flatMap((m) => m.options)
   );
 
-  const showLiveScore = match.status === "LIVE" || match.status === "FINISHED";
   const hasScore = match.scoreA !== null && match.scoreB !== null;
+  const showBigScore =
+    hasScore && (match.status === "LIVE" || match.status === "FINISHED");
 
   function marketLabel(type: MarketType) {
     return t.markets[type];
@@ -115,6 +127,12 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
     }
   }
 
+  function handleQuickScoreToggle(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowQuickScore((v) => !v);
+  }
+
   return (
     <div className="card hover:border-slate-600 transition">
       <div className="flex items-center justify-between mb-3">
@@ -129,25 +147,23 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 text-center">
           <p className="font-bold text-lg text-white">{match.teamA}</p>
-          {showLiveScore && hasScore && (
+          {showBigScore && (
             <p className="text-3xl font-black text-emerald-400 mt-1">{match.scoreA}</p>
           )}
         </div>
         <div className="text-slate-500 font-bold">{t.matches.vs}</div>
         <div className="flex-1 text-center">
           <p className="font-bold text-lg text-white">{match.teamB}</p>
-          {showLiveScore && hasScore && (
+          {showBigScore && (
             <p className="text-3xl font-black text-emerald-400 mt-1">{match.scoreB}</p>
           )}
         </div>
       </div>
 
-      {showLiveScore && (
-        <p className="text-xs text-slate-400 mt-2 text-center">
-          {t.matches.score}:{" "}
-          {hasScore ? `${match.scoreA} - ${match.scoreB}` : t.matches.scoreUnavailable}
-        </p>
-      )}
+      <p className="text-xs text-slate-400 mt-2 text-center">
+        {t.matches.score}:{" "}
+        {hasScore ? `${match.scoreA} - ${match.scoreB}` : t.matches.scoreUnavailable}
+      </p>
 
       {match.status === "LIVE" && lastOddsSync && (
         <p className="text-xs text-slate-500 mt-2 text-center">
@@ -205,6 +221,29 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
 
       {refreshError && (
         <p className="mt-3 text-xs text-red-400 text-center">{refreshError}</p>
+      )}
+
+      {isAdmin && (match.status === "LIVE" || match.status === "FINISHED") && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleQuickScoreToggle}
+            className="btn-secondary text-xs w-full"
+          >
+            {t.matches.quickScore}
+          </button>
+          {showQuickScore && (
+            <QuickScorePanel
+              match={match}
+              compact
+              onCancel={() => setShowQuickScore(false)}
+              onSaved={() => {
+                setShowQuickScore(false);
+                onScoreSaved?.();
+              }}
+            />
+          )}
+        </div>
       )}
 
       {showPickButton && (onPick || onRefreshOdds) && (

@@ -47,6 +47,7 @@ export function translateError(
     "Forbidden": "FORBIDDEN",
     "Insufficient points": "INSUFFICIENT_POINTS",
     "Match has already started": "MATCH_LOCKED",
+    "API_NO_LIVE_ODDS": "API_NO_LIVE_ODDS",
     "MATCH_FINISHED": "MATCH_FINISHED",
     "This market option is not available": "OPTION_NOT_ACTIVE",
     "Cannot edit a resolved pick": "PICK_RESOLVED",

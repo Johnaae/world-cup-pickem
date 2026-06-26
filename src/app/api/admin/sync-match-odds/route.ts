@@ -39,6 +39,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      message: "Đã làm mới kèo",
       matchId,
       lastSyncedAt: new Date().toISOString(),
     });
@@ -46,12 +47,16 @@ export async function POST(request: Request) {
     console.error("[sync-match-odds] Failed:", error);
 
     if (error instanceof OddsProviderError) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: error.statusCode });
+      const errorKey = error.message === "API_NO_LIVE_ODDS" ? "API_NO_LIVE_ODDS" : error.message;
+      return NextResponse.json({ ok: false, error: errorKey }, { status: 200 });
     }
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ ok: false, error: error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: error.issues[0]?.message ?? "Invalid input" },
+        { status: 200 }
+      );
     }
     const message = error instanceof Error ? error.message : "Failed to refresh odds";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: message }, { status: 200 });
   }
 }

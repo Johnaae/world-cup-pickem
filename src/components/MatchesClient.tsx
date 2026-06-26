@@ -8,14 +8,15 @@ import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { getMatchLastSyncedAt } from "@/lib/odds/staleness";
 
-type RefreshResult = { ok: boolean; error?: string };
+type RefreshResult = { ok: boolean; error?: string; message?: string };
 
 type MatchesClientProps = {
   initialMatches: MatchWithMarkets[];
   userPoints: number;
+  isAdmin?: boolean;
 };
 
-export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps) {
+export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: MatchesClientProps) {
   const { t, locale, te } = useI18n();
   const dateLocale = getDateFnsLocale(locale);
   const [matches, setMatches] = useState(initialMatches);
@@ -46,7 +47,7 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
           body: JSON.stringify({ matchId }),
         });
 
-        let data: { ok?: boolean; error?: string } = {};
+        let data: { ok?: boolean; error?: string; message?: string } = {};
         try {
           data = await res.json();
         } catch {
@@ -54,12 +55,14 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         }
 
         if (!data.ok) {
-          return { ok: false, error: data.error ? te(data.error) : t.common.failed };
+          const errText = data.error ? te(data.error) : t.common.failed;
+          return { ok: false, error: errText };
         }
 
         await refresh();
-        setToast(t.matches.oddsRefreshed);
-        return { ok: true };
+        const toastMsg = data.message ?? t.matches.oddsRefreshed;
+        setToast(toastMsg);
+        return { ok: true, message: toastMsg };
       } catch (err) {
         console.error("[MatchesClient] refresh odds failed:", err);
         return {
@@ -137,8 +140,10 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
               <MatchCard
                 key={match.id}
                 match={match}
+                isAdmin={isAdmin}
                 onPick={() => setSelectedMatch(match)}
                 onRefreshOdds={refreshOddsForMatch}
+                onScoreSaved={refresh}
               />
             ))}
           </div>
@@ -152,7 +157,13 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {finished.map((match) => (
-              <MatchCard key={match.id} match={match} showPickButton={false} />
+              <MatchCard
+                key={match.id}
+                match={match}
+                isAdmin={isAdmin}
+                showPickButton={false}
+                onScoreSaved={refresh}
+              />
             ))}
           </div>
         )}

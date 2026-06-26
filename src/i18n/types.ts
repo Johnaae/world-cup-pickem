@@ -73,6 +73,7 @@ export type Dictionary = {
     score: string;
     scoreUnavailable: string;
     oddsLastUpdated: string;
+    quickScore: string;
     vs: string;
   };
   matchStatus: {
@@ -229,6 +230,11 @@ export type Dictionary = {
     manualSource: string;
     apiSource: string;
     optionsCount: string;
+    homeScore: string;
+    awayScore: string;
+    quickScore: string;
+    quickScoreTitle: string;
+    saveScore: string;
     ft: string;
     ht: string;
     syncSummary: string;

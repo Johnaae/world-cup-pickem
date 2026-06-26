@@ -3,6 +3,7 @@ import { prisma } from "../prisma";
 import { MARKET_TYPE_LABELS, optionDedupeKey, teamPairKey } from "../markets";
 import { isOptionStale } from "./staleness";
 import type { NormalizedMatch, OddsProviderName, SyncResult } from "./types";
+import { OddsProviderError } from "./types";
 
 export type SyncMode = "all" | "matches" | "odds";
 
@@ -280,6 +281,18 @@ export async function syncNormalizedMatches(
           });
         }
       }
+    }
+  }
+
+  if (options.matchId) {
+    if (filtered.length === 0) {
+      throw new OddsProviderError("API_NO_LIVE_ODDS", 404, "THEODDSAPI");
+    }
+    const hasOddsData = filtered.some((m) =>
+      m.markets.some((mk) => mk.options.length > 0)
+    );
+    if (!hasOddsData && importedMarkets === 0 && updatedMarkets === 0) {
+      throw new OddsProviderError("API_NO_LIVE_ODDS", 404, "THEODDSAPI");
     }
   }
 

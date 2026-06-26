@@ -90,6 +90,7 @@ export const en: Dictionary = {
     score: "Score",
     scoreUnavailable: "not available",
     oddsLastUpdated: "Odds last updated",
+    quickScore: "Quick score",
     vs: "VS",
   },
   matchStatus: {
@@ -246,6 +247,11 @@ export const en: Dictionary = {
     manualSource: "Manual",
     apiSource: "API Source",
     optionsCount: "{count} options",
+    homeScore: "Home",
+    awayScore: "Away",
+    quickScore: "Quick score",
+    quickScoreTitle: "Quick score entry",
+    saveScore: "Save score",
     ft: "FT",
     ht: "HT",
     syncSummary: "Imported {importedMatches} matches, updated {updatedMatches}. Imported {importedMarkets} markets, updated {updatedMarkets}.",
@@ -434,6 +440,7 @@ export const en: Dictionary = {
     ODDS_STALE_UPCOMING: "Odds have changed. Please refresh and try again.",
     OPTION_NOT_ACTIVE: "This option is closed or suspended.",
     REOPEN_BEFORE_KICKOFF: "Can only reopen odds before kickoff.",
+    API_NO_LIVE_ODDS: "API has no live odds for this match. You can enter manually.",
   },
   adminUsers: {
     title: "Manage Players",

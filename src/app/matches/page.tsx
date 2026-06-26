@@ -35,7 +35,11 @@ export default async function MatchesPage() {
       <main className="mx-auto max-w-6xl px-4 py-8">
         <h1 className="text-3xl font-bold text-white mb-2">{t.matches.title}</h1>
         <p className="text-slate-400 mb-8">{t.matches.subtitle}</p>
-        <MatchesClient initialMatches={matches} userPoints={user?.points ?? 0} />
+        <MatchesClient
+          initialMatches={matches}
+          userPoints={user?.points ?? 0}
+          isAdmin={session.role === "ADMIN"}
+        />
       </main>
     </div>
   );
