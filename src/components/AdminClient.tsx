@@ -54,7 +54,7 @@ export function AdminClient({
       const res = await fetch("/api/admin/sync-odds");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to sync matches and multipliers.");
-      setMessage("Matches and multipliers synced successfully.");
+      setMessage("Markets synced from The Odds API successfully.");
       setMessageType("success");
       setSyncedAt(data.lastSyncedAt ?? new Date().toISOString());
       setSyncSummary(
@@ -175,19 +175,30 @@ export function AdminClient({
   return (
     <div className="space-y-8">
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-2">Sync All Markets</h2>
+        <h2 className="text-lg font-bold text-white mb-2">Sync The Odds API</h2>
         <p className="text-sm text-slate-400 mb-4">
-          Import matches and all available market multipliers. No real money. No payment. No cash prize. Points have no monetary value.
+          Automatically import matches and market multipliers from The Odds API. Virtual points only — no real money.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={handleSync} disabled={syncing || loading} className="btn-primary">
-            {syncing ? "Syncing..." : "Sync All Markets"}
+            {syncing ? "Syncing..." : "Sync The Odds API Markets"}
           </button>
           <span className="text-sm text-slate-400">
             Last synced: {syncedAt ? format(new Date(syncedAt), "PPp") : "Never synced"}
           </span>
         </div>
         {syncSummary && <p className="text-xs text-slate-500 mt-3">{syncSummary}</p>}
+      </div>
+
+      <div className="card">
+        <h2 className="text-lg font-bold text-white mb-2">Manual Markets</h2>
+        <p className="text-sm text-slate-400 mb-4">
+          Enter advanced markets (handicap, corners, BTTS, correct score, etc.) from any source. Virtual points only.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <a href="/admin/manual-markets" className="btn-primary">Manual Market Entry</a>
+          <a href="/admin/manual-settlement" className="btn-secondary">Manual Settlement</a>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -265,12 +276,12 @@ export function AdminClient({
             {expandedMarkets === match.id && (
               <div className="mb-4 space-y-3">
                 {match.markets.length === 0 ? (
-                  <p className="text-sm text-slate-500">No markets imported. Run sync to import markets.</p>
+                  <p className="text-sm text-slate-500">No markets yet. Sync from The Odds API or use Bulk Market Entry below.</p>
                 ) : (
                   match.markets.map((market) => (
                     <div key={market.id} className="rounded-lg bg-slate-800/40 p-3">
                       <p className="text-sm font-semibold text-white mb-2">
-                        {MARKET_TYPE_LABELS[market.type as MarketType]} ({market.options.length} options)
+                        {MARKET_TYPE_LABELS[market.type as MarketType]} · {market.provider === "MANUAL" ? "Manual" : market.provider === "THEODDSAPI" ? "The Odds API" : market.provider} ({market.options.length} options)
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {market.options.map((opt) => (

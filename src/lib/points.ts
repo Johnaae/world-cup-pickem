@@ -9,7 +9,7 @@ import {
   type Market,
 } from "@prisma/client";
 import { prisma } from "./prisma";
-import { canAutoSettle, getMatchResultOutcome, isOptionWinner } from "./markets";
+import { canAutoSettle, getMatchResultOutcome, isOptionWinner, requiresManualSettlement } from "./markets";
 
 export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   const profit = Math.round(pointsRisked * multiplier);
@@ -62,6 +62,7 @@ export async function createOrUpdatePick(params: {
   });
 
   if (!option) throw new Error("Market option not found");
+  if (option.status !== "ACTIVE") throw new Error("This market option is not available");
 
   const match = option.market.match;
   if (isMatchLocked(match)) throw new Error("Match has already started");
@@ -269,8 +270,10 @@ export async function settleMatch(
     });
 
     for (const pick of pendingPicks) {
-      if (pick.market && !canAutoSettle(pick.market.type, updatedMatch)) {
-        continue;
+      if (pick.market) {
+        if (pick.market.settledAt) continue;
+        if (requiresManualSettlement(pick.market.type)) continue;
+        if (!canAutoSettle(pick.market.type, updatedMatch)) continue;
       }
       await resolvePickWithOption(tx, pick, updatedMatch);
     }

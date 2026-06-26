@@ -20,7 +20,28 @@ export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
   [MarketType.FIRST_HALF_HANDICAP]: "First Half Handicap",
   [MarketType.FIRST_HALF_TOTAL_GOALS]: "First Half Total Goals",
   [MarketType.CORRECT_SCORE]: "Correct Score",
+  [MarketType.BOTH_TEAMS_TO_SCORE]: "Both Teams To Score",
+  [MarketType.TOTAL_CORNERS]: "Total Corners",
+  [MarketType.CORNER_HANDICAP]: "Corner Handicap",
+  [MarketType.TOTAL_CARDS]: "Total Cards",
+  [MarketType.NEXT_GOAL]: "Next Goal",
+  [MarketType.LIVE_GOAL]: "Live Goal",
 };
+
+export const MANUAL_MARKET_TYPES: MarketType[] = [
+  MarketType.HANDICAP,
+  MarketType.TOTAL_GOALS,
+  MarketType.FIRST_HALF_WINNER,
+  MarketType.FIRST_HALF_HANDICAP,
+  MarketType.FIRST_HALF_TOTAL_GOALS,
+  MarketType.CORRECT_SCORE,
+  MarketType.BOTH_TEAMS_TO_SCORE,
+  MarketType.TOTAL_CORNERS,
+  MarketType.CORNER_HANDICAP,
+  MarketType.TOTAL_CARDS,
+  MarketType.NEXT_GOAL,
+  MarketType.LIVE_GOAL,
+];
 
 export const FIRST_HALF_TYPES: MarketType[] = [
   MarketType.FIRST_HALF_WINNER,
@@ -41,7 +62,25 @@ export const HALF_SCORE_SETTLE_TYPES: MarketType[] = [
   MarketType.FIRST_HALF_TOTAL_GOALS,
 ];
 
-export type PickTab = "winner" | "handicap" | "totals" | "firstHalf" | "correctScore";
+export const MANUAL_SETTLE_TYPES: MarketType[] = [
+  MarketType.BOTH_TEAMS_TO_SCORE,
+  MarketType.TOTAL_CORNERS,
+  MarketType.CORNER_HANDICAP,
+  MarketType.TOTAL_CARDS,
+  MarketType.NEXT_GOAL,
+  MarketType.LIVE_GOAL,
+];
+
+export type PickTab =
+  | "winner"
+  | "handicap"
+  | "totals"
+  | "firstHalf"
+  | "correctScore"
+  | "btts"
+  | "corners"
+  | "cards"
+  | "live";
 
 export const TAB_MARKET_TYPES: Record<PickTab, MarketType[]> = {
   winner: [MarketType.WINNER],
@@ -49,6 +88,10 @@ export const TAB_MARKET_TYPES: Record<PickTab, MarketType[]> = {
   totals: [MarketType.TOTAL_GOALS],
   firstHalf: FIRST_HALF_TYPES,
   correctScore: [MarketType.CORRECT_SCORE],
+  btts: [MarketType.BOTH_TEAMS_TO_SCORE],
+  corners: [MarketType.TOTAL_CORNERS, MarketType.CORNER_HANDICAP],
+  cards: [MarketType.TOTAL_CARDS],
+  live: [MarketType.NEXT_GOAL, MarketType.LIVE_GOAL],
 };
 
 export const TAB_LABELS: Record<PickTab, string> = {
@@ -57,7 +100,23 @@ export const TAB_LABELS: Record<PickTab, string> = {
   totals: "Total Goals",
   firstHalf: "1st Half",
   correctScore: "Correct Score",
+  btts: "BTTS",
+  corners: "Corners",
+  cards: "Cards",
+  live: "Live",
 };
+
+export const PICK_TABS: PickTab[] = [
+  "winner",
+  "handicap",
+  "totals",
+  "firstHalf",
+  "correctScore",
+  "btts",
+  "corners",
+  "cards",
+  "live",
+];
 
 export function normalizeTeamName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -112,7 +171,8 @@ export function isOptionWinner(
       return option.outcomeType === outcome;
     }
     case MarketType.HANDICAP:
-    case MarketType.FIRST_HALF_HANDICAP: {
+    case MarketType.FIRST_HALF_HANDICAP:
+    case MarketType.CORNER_HANDICAP: {
       if (option.pointLine === null || option.pointLine === undefined) return null;
       if (option.outcomeType === "TEAM_A") {
         return scoreA + option.pointLine > scoreB;
@@ -123,7 +183,9 @@ export function isOptionWinner(
       return false;
     }
     case MarketType.TOTAL_GOALS:
-    case MarketType.FIRST_HALF_TOTAL_GOALS: {
+    case MarketType.FIRST_HALF_TOTAL_GOALS:
+    case MarketType.TOTAL_CORNERS:
+    case MarketType.TOTAL_CARDS: {
       if (option.pointLine === null || option.pointLine === undefined) return null;
       const total = scoreA + scoreB;
       if (option.outcomeType === "OVER") return total > option.pointLine;
@@ -166,5 +228,9 @@ export function canAutoSettle(marketType: MarketType, match: Match): boolean {
 }
 
 export function requiresManualSettlement(marketType: MarketType): boolean {
-  return HALF_SCORE_SETTLE_TYPES.includes(marketType);
+  return MANUAL_SETTLE_TYPES.includes(marketType);
+}
+
+export function isManualOnlyMarketType(marketType: MarketType): boolean {
+  return MANUAL_SETTLE_TYPES.includes(marketType) || marketType === MarketType.CORRECT_SCORE;
 }

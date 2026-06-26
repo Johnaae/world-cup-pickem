@@ -48,6 +48,30 @@ enum MarketType {
   FIRST_HALF_HANDICAP
   FIRST_HALF_TOTAL_GOALS
   CORRECT_SCORE
+  BOTH_TEAMS_TO_SCORE
+  TOTAL_CORNERS
+  CORNER_HANDICAP
+  TOTAL_CARDS
+  NEXT_GOAL
+  LIVE_GOAL
+}
+
+enum OptionSettlement {
+  UNSETTLED
+  WON
+  LOST
+}
+
+enum OddsProvider {
+  SPORTSGAMEODDS
+  THEODDSAPI
+  MANUAL
+}
+
+enum OptionStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
 }
 
 model User {
@@ -75,8 +99,9 @@ model Match {
   multiplierTeamA  Float       @default(1.5)
   multiplierDraw   Float       @default(3.0)
   multiplierTeamB  Float       @default(2.5)
-  oddsApiId        String?     @unique
-  createdAt        DateTime    @default(now())
+  oddsApiId        String?       @unique
+  externalProvider OddsProvider?
+  createdAt        DateTime      @default(now())
   picks            Pick[]
   markets          Market[]
 }
@@ -86,8 +111,10 @@ model Market {
   matchId      String
   type         MarketType
   label        String
+  provider     OddsProvider   @default(MANUAL)
   bookmaker    String?
   lastSyncedAt DateTime?
+  settledAt    DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   match        Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -98,7 +125,7 @@ model Market {
 }
 
 model MarketOption {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   marketId       String
   label          String
   outcomeType    String
@@ -107,9 +134,15 @@ model MarketOption {
   correctScoreA  Int?
   correctScoreB  Int?
   multiplier     Float
-  externalId     String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  provider       OddsProvider @default(MANUAL)
+  bookmaker      String?
+  sourceSyncedAt DateTime?
+  status            OptionStatus      @default(ACTIVE)
+  note              String?
+  settlementResult  OptionSettlement  @default(UNSETTLED)
+  externalId        String?
+  createdAt         DateTime          @default(now())
+  updatedAt      DateTime     @updatedAt
   market         Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
   picks          Pick[]
 
@@ -157,5 +190,6 @@ model AppSettings {
   disclaimer     String    @default("For entertainment purposes only. No real-money betting. No payments. No cash prizes. Points have no monetary value.")
   inviteCode     String    @default("WORLDCUP2026")
   lastOddsSyncAt DateTime?
+  oddsProvider   String?
   updatedAt      DateTime  @updatedAt
 }

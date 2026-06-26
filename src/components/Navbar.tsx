@@ -28,6 +28,7 @@ export function Navbar({ user }: NavbarProps) {
               {user.role === "ADMIN" && (
                 <>
                   <Link href="/admin" className="nav-link">Admin</Link>
+                  <Link href="/admin/manual-markets" className="nav-link hidden lg:inline">Manual Markets</Link>
                   <Link href="/settings" className="nav-link">Settings</Link>
                 </>
               )}

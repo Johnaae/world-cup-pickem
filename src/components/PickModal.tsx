@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import type { Match, Market, MarketOption, Pick } from "@prisma/client";
 import {
+  PICK_TABS,
   TAB_LABELS,
   TAB_MARKET_TYPES,
   MARKET_TYPE_LABELS,
@@ -24,8 +25,9 @@ type PickModalProps = {
   onSuccess: () => void;
 };
 
+type OptionWithMarket = MarketOption & { market: Market };
+
 const PRESET_AMOUNTS = [10, 25, 50, 100];
-const TABS: PickTab[] = ["winner", "handicap", "totals", "firstHalf", "correctScore"];
 
 export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: PickModalProps) {
   const [activeTab, setActiveTab] = useState<PickTab>("winner");
@@ -46,28 +48,36 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
       totals: [],
       firstHalf: [],
       correctScore: [],
+      btts: [],
+      corners: [],
+      cards: [],
+      live: [],
     };
-    for (const tab of TABS) {
+    for (const tab of PICK_TABS) {
       const types = TAB_MARKET_TYPES[tab];
-      map[tab] = match.markets.filter((m) => types.includes(m.type));
+      map[tab] = match.markets
+        .filter((m) => types.includes(m.type))
+        .filter((m) => m.options.some((o) => o.status === "ACTIVE" || o.status === "SUSPENDED" || o.status === "CLOSED"));
     }
     return map;
   }, [match.markets]);
 
   const activeMarkets = tabMarkets[activeTab];
-  const tabAvailable = activeMarkets.some((m) => m.options.length > 0);
+  const tabAvailable = activeMarkets.some((m) => m.options.some((o) => o.status === "ACTIVE"));
 
-  const allActiveOptions = activeMarkets.flatMap((m) =>
+  const allOptionsWithMarket: OptionWithMarket[] = activeMarkets.flatMap((m) =>
     m.options.map((o) => ({ ...o, market: m }))
   );
 
-  const selectedOption = allActiveOptions.find((o) => o.id === selectedOptionId);
+  const selectedOption = allOptionsWithMarket.find((o) => o.id === selectedOptionId && o.status === "ACTIVE");
   const existingPickForMarket = selectedOption
     ? userPicks.find((p) => p.marketId === selectedOption.market.id)
     : null;
 
   const multiplier = selectedOption?.multiplier ?? 0;
   const potentialProfit = Math.round(pointsRisked * multiplier);
+  const showManualHint = activeMarkets.some((m) => m.provider === "MANUAL" || m.bookmaker === "Manual");
+  const needsManualSettlement = activeTab === "firstHalf" || activeTab === "correctScore" || activeTab === "btts" || activeTab === "corners" || activeTab === "cards" || activeTab === "live";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,27 +124,30 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="flex flex-wrap gap-1 border-b border-slate-800 pb-2">
-              {TABS.map((tab) => {
-                const available = tabMarkets[tab].some((m) => m.options.length > 0);
+              {PICK_TABS.map((tab) => {
+                const hasOptions = tabMarkets[tab].length > 0;
+                const hasActive = tabMarkets[tab].some((m) => m.options.some((o) => o.status === "ACTIVE"));
                 return (
                   <button
                     key={tab}
                     type="button"
-                    disabled={!available}
+                    disabled={!hasOptions}
                     onClick={() => {
                       setActiveTab(tab);
                       setSelectedOptionId(null);
                     }}
-                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                    className={`rounded-lg px-2 py-2 text-xs font-semibold transition ${
                       activeTab === tab
                         ? "bg-emerald-600 text-white"
-                        : available
+                        : hasActive
                           ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                          : "bg-slate-900 text-slate-600 cursor-not-allowed"
+                          : hasOptions
+                            ? "bg-slate-900 text-slate-500"
+                            : "bg-slate-900 text-slate-600 cursor-not-allowed"
                     }`}
                   >
                     {TAB_LABELS[tab]}
-                    {!available && <span className="block text-[10px] font-normal">Not available</span>}
+                    {!hasOptions && <span className="block text-[10px] font-normal">N/A</span>}
                   </button>
                 );
               })}
@@ -142,46 +155,51 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
 
             {!tabAvailable ? (
               <p className="text-sm text-slate-400 py-4 text-center">
-                This market is not available for this match.
+                No active options for this market.
               </p>
             ) : (
               <>
-                {activeTab === "firstHalf" ? (
+                {showManualHint && (
+                  <p className="text-xs text-slate-500">Manual source</p>
+                )}
+
+                {activeTab === "firstHalf" || activeTab === "corners" || activeTab === "live" ? (
                   <div className="space-y-4">
                     {activeMarkets.map((market) => (
                       <div key={market.id}>
                         <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
                           {MARKET_TYPE_LABELS[market.type as MarketType]}
+                          {(market.provider === "MANUAL" || market.bookmaker === "Manual") && (
+                            <span className="ml-2 normal-case text-slate-600">· Manual</span>
+                          )}
                         </p>
                         <OptionGrid
-                          options={market.options}
+                          options={market.options.map((o) => ({ ...o, market }))}
                           selectedId={selectedOptionId}
                           onSelect={setSelectedOptionId}
                         />
                       </div>
                     ))}
-                    <p className="text-xs text-amber-400/80">
-                      Advanced markets may require admin settlement.
-                    </p>
                   </div>
                 ) : activeTab === "correctScore" ? (
-                  <>
-                    <OptionGrid
-                      options={allActiveOptions}
-                      selectedId={selectedOptionId}
-                      onSelect={setSelectedOptionId}
-                      compact
-                    />
-                    <p className="text-xs text-amber-400/80">
-                      Advanced markets may require admin settlement.
-                    </p>
-                  </>
+                  <OptionGrid
+                    options={allOptionsWithMarket}
+                    selectedId={selectedOptionId}
+                    onSelect={setSelectedOptionId}
+                    compact
+                  />
                 ) : (
                   <OptionGrid
-                    options={allActiveOptions}
+                    options={allOptionsWithMarket}
                     selectedId={selectedOptionId}
                     onSelect={setSelectedOptionId}
                   />
+                )}
+
+                {needsManualSettlement && (
+                  <p className="text-xs text-amber-400/80">
+                    Advanced markets may require admin settlement.
+                  </p>
                 )}
 
                 <div>
@@ -268,28 +286,42 @@ function OptionGrid({
   onSelect,
   compact = false,
 }: {
-  options: MarketOption[];
+  options: OptionWithMarket[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   compact?: boolean;
 }) {
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          onClick={() => onSelect(option.id)}
-          className={`flex flex-col items-center justify-center rounded-xl border p-3 min-h-[72px] transition ${
-            selectedId === option.id
-              ? "border-emerald-500 bg-emerald-500/20 text-white"
-              : "border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-500"
-          }`}
-        >
-          <span className="font-semibold text-sm text-center leading-tight">{option.label}</span>
-          <span className="text-xs text-slate-400 mt-1">x{option.multiplier}</span>
-        </button>
-      ))}
+      {options.map((option) => {
+        const isActive = option.status === "ACTIVE";
+        const isSelected = selectedId === option.id && isActive;
+        const statusLabel =
+          option.status === "SUSPENDED" ? "Suspended" :
+          option.status === "CLOSED" ? "Closed" : null;
+
+        return (
+          <button
+            key={option.id}
+            type="button"
+            disabled={!isActive}
+            onClick={() => isActive && onSelect(option.id)}
+            className={`flex flex-col items-center justify-center rounded-xl border p-3 min-h-[72px] transition ${
+              isSelected
+                ? "border-emerald-500 bg-emerald-500/20 text-white"
+                : isActive
+                  ? "border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-500"
+                  : "border-slate-800 bg-slate-900/50 text-slate-600 cursor-not-allowed opacity-60"
+            }`}
+          >
+            <span className="font-semibold text-sm text-center leading-tight">{option.label}</span>
+            <span className="text-xs text-slate-400 mt-1">x{option.multiplier}</span>
+            {statusLabel && (
+              <span className="text-[10px] text-amber-500/80 mt-1">{statusLabel}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

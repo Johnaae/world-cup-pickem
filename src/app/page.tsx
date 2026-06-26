@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getAppSettings } from "@/lib/settings";
 import { Navbar } from "@/components/Navbar";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const settings = await getAppSettings();
 
