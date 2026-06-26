@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getServerI18n } from "@/i18n/server";
 import { Navbar } from "@/components/Navbar";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/LeaderboardTable";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LeaderboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const { dict: t } = await getServerI18n();
 
   const users = await prisma.user.findMany({
     select: {
@@ -45,8 +47,8 @@ export default async function LeaderboardPage() {
       <Navbar user={session} />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-black text-white">🏆 Leaderboard</h1>
-          <p className="mt-2 text-slate-400">Virtual points only — for fun and bragging rights!</p>
+          <h1 className="text-4xl font-black text-white">🏆 {t.leaderboard.title}</h1>
+          <p className="mt-2 text-slate-400">{t.leaderboard.subtitle}</p>
         </div>
         <LeaderboardTable entries={leaderboard} highlightUserId={session.id} />
       </main>

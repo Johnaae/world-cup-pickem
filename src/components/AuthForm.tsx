@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useI18n } from "@/i18n/context";
 
 type AuthFormProps = {
   mode: "login" | "register";
 };
 
 export function AuthForm({ mode }: AuthFormProps) {
+  const { t, te } = useI18n();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,10 +34,10 @@ export function AuthForm({ mode }: AuthFormProps) {
         ),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Authentication failed");
+      if (!res.ok) throw new Error(te(data.error));
       window.location.href = "/dashboard";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : t.common.somethingWrong);
     } finally {
       setLoading(false);
     }
@@ -44,54 +46,52 @@ export function AuthForm({ mode }: AuthFormProps) {
   return (
     <div className="card w-full max-w-md">
       <h1 className="text-2xl font-bold text-white mb-1">
-        {mode === "login" ? "Welcome back" : "Join the group"}
+        {mode === "login" ? t.auth.welcomeBack : t.auth.joinGroup}
       </h1>
       <p className="text-slate-400 text-sm mb-6">
-        {mode === "login"
-          ? "Log in to make your picks"
-          : "Register with your invite code"}
+        {mode === "login" ? t.auth.loginSubtitle : t.auth.registerSubtitle}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {mode === "register" && (
           <>
             <div>
-              <label className="label">Name</label>
+              <label className="label">{t.auth.name}</label>
               <input
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                placeholder="Your name"
+                placeholder={t.auth.namePlaceholder}
               />
             </div>
             <div>
-              <label className="label">Invite Code</label>
+              <label className="label">{t.auth.inviteCode}</label>
               <input
                 className="input"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value)}
                 required
-                placeholder="Group invite code"
+                placeholder={t.auth.invitePlaceholder}
               />
             </div>
           </>
         )}
 
         <div>
-          <label className="label">Email</label>
+          <label className="label">{t.auth.email}</label>
           <input
             type="email"
             className="input"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="you@example.com"
+            placeholder={t.auth.emailPlaceholder}
           />
         </div>
 
         <div>
-          <label className="label">Password</label>
+          <label className="label">{t.auth.password}</label>
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
@@ -107,7 +107,7 @@ export function AuthForm({ mode }: AuthFormProps) {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 hover:text-white"
             >
-              {showPassword ? "Hide" : "Show"}
+              {showPassword ? t.auth.hide : t.auth.show}
             </button>
           </div>
         </div>
@@ -115,23 +115,27 @@ export function AuthForm({ mode }: AuthFormProps) {
         {error && <p className="text-red-400 text-sm">{error}</p>}
 
         <button type="submit" disabled={loading} className="btn-primary w-full">
-          {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
+          {loading
+            ? t.auth.pleaseWait
+            : mode === "login"
+              ? t.nav.login
+              : t.auth.createAccount}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-400">
         {mode === "login" ? (
           <>
-            No account?{" "}
+            {t.auth.noAccount}{" "}
             <Link href="/register" className="text-emerald-400 hover:underline">
-              Sign up
+              {t.nav.signup}
             </Link>
           </>
         ) : (
           <>
-            Already have an account?{" "}
+            {t.auth.hasAccount}{" "}
             <Link href="/login" className="text-emerald-400 hover:underline">
-              Log in
+              {t.nav.login}
             </Link>
           </>
         )}

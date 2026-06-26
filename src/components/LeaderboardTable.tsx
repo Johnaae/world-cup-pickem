@@ -1,3 +1,7 @@
+"use client";
+
+import { useI18n } from "@/i18n/context";
+
 export type LeaderboardEntry = {
   rank: number;
   id?: string;
@@ -17,21 +21,23 @@ type LeaderboardTableProps = {
 };
 
 export function LeaderboardTable({ entries, highlightUserId, compact = false }: LeaderboardTableProps) {
+  const { t } = useI18n();
+
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-800">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-slate-900 text-slate-400 text-left">
-            <th className="px-4 py-3 font-medium">#</th>
-            <th className="px-4 py-3 font-medium">Player</th>
-            <th className="px-4 py-3 font-medium">Points</th>
+            <th className="px-4 py-3 font-medium">{t.leaderboard.rank}</th>
+            <th className="px-4 py-3 font-medium">{t.leaderboard.player}</th>
+            <th className="px-4 py-3 font-medium">{t.leaderboard.points}</th>
             {!compact && (
               <>
-                <th className="px-4 py-3 font-medium hidden sm:table-cell">Picks</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Correct</th>
-                <th className="px-4 py-3 font-medium hidden md:table-cell">Win %</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Best Win</th>
-                <th className="px-4 py-3 font-medium hidden lg:table-cell">Worst Loss</th>
+                <th className="px-4 py-3 font-medium hidden sm:table-cell">{t.leaderboard.picks}</th>
+                <th className="px-4 py-3 font-medium hidden md:table-cell">{t.leaderboard.correct}</th>
+                <th className="px-4 py-3 font-medium hidden md:table-cell">{t.leaderboard.winRate}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t.leaderboard.bestWin}</th>
+                <th className="px-4 py-3 font-medium hidden lg:table-cell">{t.leaderboard.worstLoss}</th>
               </>
             )}
           </tr>
@@ -48,13 +54,9 @@ export function LeaderboardTable({ entries, highlightUserId, compact = false }: 
                   isHighlighted ? "bg-emerald-500/10" : entry.rank <= 3 ? "bg-slate-900/50" : ""
                 }`}
               >
-                <td className="px-4 py-3 font-bold text-slate-300">
-                  {medal || entry.rank}
-                </td>
+                <td className="px-4 py-3 font-bold text-slate-300">{medal || entry.rank}</td>
                 <td className="px-4 py-3 font-semibold text-white">{entry.name}</td>
-                <td className="px-4 py-3 font-bold text-emerald-400">
-                  {entry.points.toLocaleString()}
-                </td>
+                <td className="px-4 py-3 font-bold text-emerald-400">{entry.points.toLocaleString()}</td>
                 {!compact && (
                   <>
                     <td className="px-4 py-3 text-slate-400 hidden sm:table-cell">{entry.totalPicks}</td>

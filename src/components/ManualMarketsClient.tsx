@@ -7,10 +7,9 @@ import { MarketType, OptionStatus } from "@prisma/client";
 import {
   BULK_PASTE_EXAMPLE,
 } from "@/lib/odds/bulkPaste";
-import {
-  MANUAL_MARKET_TYPES,
-  MARKET_TYPE_LABELS,
-} from "@/lib/markets";
+import { MANUAL_MARKET_TYPES } from "@/lib/markets";
+import { useI18n } from "@/i18n/context";
+import { getDateFnsLocale } from "@/i18n/dates";
 
 type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -31,6 +30,8 @@ export function ManualMarketsClient({
 }: {
   initialMatches: MatchWithMarkets[];
 }) {
+  const { t, locale, fmt, te } = useI18n();
+  const dateLocale = getDateFnsLocale(locale);
   const [matches, setMatches] = useState(initialMatches);
   const [matchId, setMatchId] = useState(initialMatches[0]?.id ?? "");
   const [marketType, setMarketType] = useState<MarketType>(MarketType.HANDICAP);
@@ -81,12 +82,12 @@ export function ManualMarketsClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(te(data.error));
       setForm(emptyForm);
-      showMsg("Option saved. Source: Manual.");
+      showMsg(t.manualMarkets.optionSaved);
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Failed", "error");
+      showMsg(err instanceof Error ? err.message : t.common.failed, "error");
     } finally {
       setLoading(false);
     }
@@ -103,11 +104,11 @@ export function ManualMarketsClient({
         body: JSON.stringify({ matchId, text: bulkText }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(te(data.error));
       showMsg(data.message + (data.errors?.length ? ` (${data.errors.length} warnings)` : ""));
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Import failed", "error");
+      showMsg(err instanceof Error ? err.message : te(undefined, "IMPORT_FAILED"), "error");
     } finally {
       setLoading(false);
     }
@@ -128,28 +129,28 @@ export function ManualMarketsClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(te(data.error));
       setEditingId(null);
-      showMsg("Option updated.");
+      showMsg(t.manualMarkets.optionUpdated);
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Failed", "error");
+      showMsg(err instanceof Error ? err.message : t.common.failed, "error");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleDeleteOption(id: string) {
-    if (!confirm("Delete this option?")) return;
+    if (!confirm(t.manualMarkets.deleteOptionConfirm)) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/market-options/${id}`, { method: "DELETE" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg("Option deleted.");
+      if (!res.ok) throw new Error(te(data.error));
+      showMsg(t.manualMarkets.optionDeleted);
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Failed", "error");
+      showMsg(err instanceof Error ? err.message : t.common.failed, "error");
     } finally {
       setLoading(false);
     }
@@ -164,11 +165,11 @@ export function ManualMarketsClient({
         body: JSON.stringify({ status }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg(`Option marked ${status}.`);
+      if (!res.ok) throw new Error(te(data.error));
+      showMsg(fmt(t.manualMarkets.optionStatusChanged, { status: t.optionStatus[status] }));
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Failed", "error");
+      showMsg(err instanceof Error ? err.message : t.common.failed, "error");
     } finally {
       setLoading(false);
     }
@@ -187,12 +188,12 @@ export function ManualMarketsClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      showMsg("Market duplicated to target match.");
+      if (!res.ok) throw new Error(te(data.error));
+      showMsg(t.manualMarkets.duplicated);
       setDuplicateMarketId("");
       await refresh();
     } catch (err) {
-      showMsg(err instanceof Error ? err.message : "Failed", "error");
+      showMsg(err instanceof Error ? err.message : t.common.failed, "error");
     } finally {
       setLoading(false);
     }
@@ -203,7 +204,7 @@ export function ManualMarketsClient({
   return (
     <div className="space-y-8">
       <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-4 text-sm text-slate-400">
-        Virtual points only — no payments, no real money, no cash prizes. Points have no monetary value.
+        {t.manualMarkets.safetyNotice}
       </div>
 
       {message && (
@@ -217,18 +218,18 @@ export function ManualMarketsClient({
       )}
 
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-4">Select Match</h2>
+        <h2 className="text-lg font-bold text-white mb-4">{t.manualMarkets.selectMatch}</h2>
         <select
           className="input"
           value={matchId}
           onChange={(e) => setMatchId(e.target.value)}
         >
           {matches.length === 0 ? (
-            <option value="">No upcoming or live matches</option>
+            <option value="">{t.manualMarkets.noMatches}</option>
           ) : (
             matches.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.teamA} vs {m.teamB} · {format(new Date(m.startTime), "MMM d, h:mm a")} · {m.status}
+                {m.teamA} {t.matches.vs} {m.teamB} · {format(new Date(m.startTime), "MMM d, h:mm a", { locale: dateLocale })} · {t.matchStatus[m.status]}
               </option>
             ))
           )}
@@ -237,72 +238,72 @@ export function ManualMarketsClient({
 
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="card">
-          <h2 className="text-lg font-bold text-white mb-4">Add Option Manually</h2>
+          <h2 className="text-lg font-bold text-white mb-4">{t.manualMarkets.addOptionTitle}</h2>
           <form onSubmit={handleAddOption} className="space-y-3">
             <div>
-              <label className="label">Market type</label>
+              <label className="label">{t.manualMarkets.marketType}</label>
               <select
                 className="input"
                 value={marketType}
                 onChange={(e) => setMarketType(e.target.value as MarketType)}
               >
-                {MANUAL_MARKET_TYPES.map((t) => (
-                  <option key={t} value={t}>{MARKET_TYPE_LABELS[t]}</option>
+                {MANUAL_MARKET_TYPES.map((mt) => (
+                  <option key={mt} value={mt}>{t.markets[mt]}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label">Label</label>
-              <input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="France -1.5" required />
+              <label className="label">{t.manualMarkets.label}</label>
+              <input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={t.manualMarkets.labelPlaceholder} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Line (optional)</label>
+                <label className="label">{t.manualMarkets.lineOptional}</label>
                 <input className="input" type="number" step="0.5" value={form.pointLine} onChange={(e) => setForm({ ...form, pointLine: e.target.value })} placeholder="-1.5" />
               </div>
               <div>
-                <label className="label">Multiplier</label>
+                <label className="label">{t.manualMarkets.multiplier}</label>
                 <input className="input" type="number" step="0.01" min="0.01" value={form.multiplier} onChange={(e) => setForm({ ...form, multiplier: e.target.value })} placeholder="0.92" required />
               </div>
             </div>
             <div>
-              <label className="label">Status</label>
+              <label className="label">{t.admin.status}</label>
               <select className="input" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as OptionStatus })}>
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>{t.optionStatus[s]}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label">Note (optional)</label>
-              <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Admin note" />
+              <label className="label">{t.manualMarkets.noteOptional}</label>
+              <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={t.manualMarkets.notePlaceholder} />
             </div>
-            <p className="text-xs text-slate-500">Source: Manual</p>
+            <p className="text-xs text-slate-500">{t.manualMarkets.sourceManual}</p>
             <button type="submit" disabled={loading || !matchId} className="btn-primary w-full">
-              {loading ? "Saving..." : "Add Option"}
+              {loading ? t.manualMarkets.saving : t.manualMarkets.addOption}
             </button>
           </form>
         </div>
 
         <div className="card">
-          <h2 className="text-lg font-bold text-white mb-2">Bulk Paste</h2>
+          <h2 className="text-lg font-bold text-white mb-2">{t.manualMarkets.bulkPasteTitle}</h2>
           <p className="text-sm text-slate-400 mb-4">
-            Paste real lines from any source. Creates markets if missing, updates existing labels.
+            {t.manualMarkets.bulkPasteDesc}
           </p>
           <form onSubmit={handleBulkPaste} className="space-y-3">
             <div className="flex justify-end">
               <button type="button" className="text-xs text-emerald-400 hover:underline" onClick={() => setBulkText(BULK_PASTE_EXAMPLE)}>
-                Load example
+                {t.manualMarkets.loadExample}
               </button>
             </div>
             <textarea
               className="input min-h-[240px] font-mono text-sm"
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
-              placeholder="Market: Handicap&#10;..."
+              placeholder={t.manualMarkets.bulkFormatHint}
             />
             <button type="submit" disabled={loading || !matchId} className="btn-primary w-full">
-              {loading ? "Importing..." : "Import Bulk Paste"}
+              {loading ? t.manualMarkets.importing : t.manualMarkets.importBulk}
             </button>
           </form>
         </div>
@@ -312,28 +313,28 @@ export function ManualMarketsClient({
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">
-              {MARKET_TYPE_LABELS[selectedMarket.type as MarketType]} · Manual
+              {t.markets[selectedMarket.type as MarketType]} · {t.admin.manualSource}
             </h2>
             {selectedMarket.settledAt && (
               <span className="text-xs rounded-full bg-amber-500/20 text-amber-300 px-3 py-1">
-                Settled {format(new Date(selectedMarket.settledAt), "PPp")}
+                {fmt(t.manualMarkets.settledAt, { date: format(new Date(selectedMarket.settledAt), "PPp", { locale: dateLocale }) })}
               </span>
             )}
           </div>
 
           {selectedMarket.options.length === 0 ? (
-            <p className="text-sm text-slate-500">No options yet for this market type.</p>
+            <p className="text-sm text-slate-500">{t.manualMarkets.noOptionsYet}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-slate-400 text-left">
-                    <th className="py-2 pr-3">Label</th>
-                    <th className="py-2 pr-3">Line</th>
-                    <th className="py-2 pr-3">Mult.</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3">Note</th>
-                    <th className="py-2">Actions</th>
+                    <th className="py-2 pr-3">{t.manualMarkets.label}</th>
+                    <th className="py-2 pr-3">{t.manualMarkets.line}</th>
+                    <th className="py-2 pr-3">{t.manualMarkets.mult}</th>
+                    <th className="py-2 pr-3">{t.admin.status}</th>
+                    <th className="py-2 pr-3">{t.manualMarkets.note}</th>
+                    <th className="py-2">{t.manualMarkets.actions}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -352,31 +353,31 @@ export function ManualMarketsClient({
                           </td>
                           <td className="py-2 pr-3">
                             <select className="input text-xs" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as OptionStatus })}>
-                              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{t.optionStatus[s]}</option>)}
                             </select>
                           </td>
                           <td className="py-2 pr-3">
                             <input className="input text-xs" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} />
                           </td>
                           <td className="py-2">
-                            <button type="button" onClick={() => handleUpdateOption(opt.id)} className="text-xs text-emerald-400 mr-2">Save</button>
-                            <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-400">Cancel</button>
+                            <button type="button" onClick={() => handleUpdateOption(opt.id)} className="text-xs text-emerald-400 mr-2">{t.common.save}</button>
+                            <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-400">{t.common.cancel}</button>
                           </td>
                         </>
                       ) : (
                         <>
                           <td className="py-2 pr-3 text-white">{opt.label}</td>
-                          <td className="py-2 pr-3 text-slate-400">{opt.pointLine ?? "—"}</td>
+                          <td className="py-2 pr-3 text-slate-400">{opt.pointLine ?? t.common.na}</td>
                           <td className="py-2 pr-3 text-slate-300">x{opt.multiplier}</td>
                           <td className="py-2 pr-3">
                             <span className={`text-xs font-semibold ${
                               opt.status === "ACTIVE" ? "text-emerald-400" :
                               opt.status === "SUSPENDED" ? "text-amber-400" : "text-red-400"
                             }`}>
-                              {opt.status}
+                              {t.optionStatus[opt.status]}
                             </span>
                           </td>
-                          <td className="py-2 pr-3 text-slate-500 text-xs">{opt.note ?? "—"}</td>
+                          <td className="py-2 pr-3 text-slate-500 text-xs">{opt.note ?? t.common.na}</td>
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
                               <button
@@ -393,18 +394,18 @@ export function ManualMarketsClient({
                                 }}
                                 className="text-xs text-slate-300 hover:underline"
                               >
-                                Edit
+                                {t.manualMarkets.edit}
                               </button>
                               {opt.status !== "SUSPENDED" && (
-                                <button type="button" onClick={() => handleStatusChange(opt.id, "SUSPENDED")} className="text-xs text-amber-400 hover:underline">Suspend</button>
+                                <button type="button" onClick={() => handleStatusChange(opt.id, "SUSPENDED")} className="text-xs text-amber-400 hover:underline">{t.manualMarkets.suspend}</button>
                               )}
                               {opt.status !== "CLOSED" && (
-                                <button type="button" onClick={() => handleStatusChange(opt.id, "CLOSED")} className="text-xs text-orange-400 hover:underline">Close</button>
+                                <button type="button" onClick={() => handleStatusChange(opt.id, "CLOSED")} className="text-xs text-orange-400 hover:underline">{t.manualMarkets.close}</button>
                               )}
                               {opt.status !== "ACTIVE" && (
-                                <button type="button" onClick={() => handleStatusChange(opt.id, "ACTIVE")} className="text-xs text-emerald-400 hover:underline">Activate</button>
+                                <button type="button" onClick={() => handleStatusChange(opt.id, "ACTIVE")} className="text-xs text-emerald-400 hover:underline">{t.manualMarkets.activate}</button>
                               )}
-                              <button type="button" onClick={() => handleDeleteOption(opt.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                              <button type="button" onClick={() => handleDeleteOption(opt.id)} className="text-xs text-red-400 hover:underline">{t.admin.delete}</button>
                             </div>
                           </td>
                         </>
@@ -419,33 +420,33 @@ export function ManualMarketsClient({
       )}
 
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-4">Duplicate Market to Another Match</h2>
+        <h2 className="text-lg font-bold text-white mb-4">{t.manualMarkets.duplicateTitle}</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <select className="input" value={duplicateMarketId} onChange={(e) => setDuplicateMarketId(e.target.value)}>
-            <option value="">Source market...</option>
+            <option value="">{t.manualMarkets.sourceMarket}</option>
             {allMarkets.map((m) => (
               <option key={m.id} value={m.id}>
-                {MARKET_TYPE_LABELS[m.type as MarketType]} ({m.options.length} opts)
+                {t.markets[m.type as MarketType]} ({fmt(t.admin.optionsCount, { count: m.options.length })})
               </option>
             ))}
           </select>
           <select className="input" value={duplicateTargetId} onChange={(e) => setDuplicateTargetId(e.target.value)}>
-            <option value="">Target match...</option>
+            <option value="">{t.manualMarkets.targetMatch}</option>
             {matches.filter((m) => m.id !== matchId).map((m) => (
               <option key={m.id} value={m.id}>
-                {m.teamA} vs {m.teamB}
+                {m.teamA} {t.matches.vs} {m.teamB}
               </option>
             ))}
           </select>
           <button type="button" onClick={handleDuplicate} disabled={loading || !duplicateMarketId || !duplicateTargetId} className="btn-secondary">
-            Duplicate
+            {t.manualMarkets.duplicate}
           </button>
         </div>
       </div>
 
       <p className="text-sm text-slate-500">
-        After a match, settle manual markets on the{" "}
-        <a href="/admin/manual-settlement" className="text-emerald-400 hover:underline">Manual Settlement</a> page.
+        {t.manualMarkets.settlementLink}{" "}
+        <a href="/admin/manual-settlement" className="text-emerald-400 hover:underline">{t.manualMarkets.settlementLinkText}</a>
       </p>
     </div>
   );

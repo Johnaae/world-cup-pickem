@@ -2,42 +2,47 @@
 
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
+import { useI18n } from "@/i18n/context";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 type NavbarProps = {
   user: SessionUser | null;
 };
 
 export function Navbar({ user }: NavbarProps) {
+  const { t } = useI18n();
+
   return (
     <nav className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href={user ? "/dashboard" : "/"} className="flex items-center gap-2">
           <span className="text-2xl">⚽</span>
-          <span className="font-bold text-white">World Cup Pick&apos;em</span>
+          <span className="font-bold text-white">{t.nav.appName}</span>
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <LanguageSwitcher compact />
           {user ? (
             <>
               <span className="hidden sm:inline text-emerald-400 font-semibold">
-                {user.points.toLocaleString()} pts
+                {user.points.toLocaleString()} {t.nav.points}
               </span>
-              <Link href="/dashboard" className="nav-link">Dashboard</Link>
-              <Link href="/matches" className="nav-link">Matches</Link>
-              <Link href="/leaderboard" className="nav-link">Leaderboard</Link>
+              <Link href="/dashboard" className="nav-link">{t.nav.dashboard}</Link>
+              <Link href="/matches" className="nav-link">{t.nav.matches}</Link>
+              <Link href="/leaderboard" className="nav-link">{t.nav.leaderboard}</Link>
               {user.role === "ADMIN" && (
                 <>
-                  <Link href="/admin" className="nav-link">Admin</Link>
-                  <Link href="/admin/manual-markets" className="nav-link hidden lg:inline">Manual Markets</Link>
-                  <Link href="/settings" className="nav-link">Settings</Link>
+                  <Link href="/admin" className="nav-link">{t.nav.admin}</Link>
+                  <Link href="/admin/manual-markets" className="nav-link hidden lg:inline">{t.nav.manualMarkets}</Link>
+                  <Link href="/settings" className="nav-link">{t.nav.settings}</Link>
                 </>
               )}
-              <LogoutButton />
+              <LogoutButton label={t.nav.logout} />
             </>
           ) : (
             <>
-              <Link href="/login" className="btn-secondary text-sm">Login</Link>
-              <Link href="/register" className="btn-primary text-sm">Sign Up</Link>
+              <Link href="/login" className="btn-secondary text-sm">{t.nav.login}</Link>
+              <Link href="/register" className="btn-primary text-sm">{t.nav.signup}</Link>
             </>
           )}
         </div>
@@ -46,7 +51,7 @@ export function Navbar({ user }: NavbarProps) {
   );
 }
 
-function LogoutButton() {
+function LogoutButton({ label }: { label: string }) {
   return (
     <button
       type="button"
@@ -56,7 +61,7 @@ function LogoutButton() {
       }}
       className="text-slate-400 hover:text-white text-sm"
     >
-      Logout
+      {label}
     </button>
   );
 }

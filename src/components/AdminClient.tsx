@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import type { Match, Market, MarketOption, Pick as UserPick, User } from "@prisma/client";
-import { MARKET_TYPE_LABELS, type MarketType } from "@/lib/markets";
+import type { MarketType } from "@/lib/markets";
+import { useI18n } from "@/i18n/context";
+import { getDateFnsLocale } from "@/i18n/dates";
 
 type AdminMatch = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -21,6 +23,8 @@ export function AdminClient({
   initialMatches: AdminMatch[];
   lastSyncedAt: string | null;
 }) {
+  const { t, locale, fmt, te } = useI18n();
+  const dateLocale = getDateFnsLocale(locale);
   const [matches, setMatches] = useState(initialMatches);
   const [form, setForm] = useState({
     teamA: "",
@@ -53,20 +57,24 @@ export function AdminClient({
     try {
       const res = await fetch("/api/admin/sync-odds");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to sync matches and multipliers.");
-      setMessage("Markets synced from The Odds API successfully.");
+      if (!res.ok) throw new Error(data.error ? te(data.error) : t.admin.syncFailed);
+      setMessage(t.admin.syncSuccess);
       setMessageType("success");
       setSyncedAt(data.lastSyncedAt ?? new Date().toISOString());
       setSyncSummary(
-        `Imported ${data.importedMatches} matches, updated ${data.updatedMatches}. ` +
-          `Imported ${data.importedMarkets} markets, updated ${data.updatedMarkets}.` +
+        fmt(t.admin.syncSummary, {
+          importedMatches: data.importedMatches,
+          updatedMatches: data.updatedMatches,
+          importedMarkets: data.importedMarkets,
+          updatedMarkets: data.updatedMarkets,
+        }) +
           (data.missingMarkets?.length
-            ? ` Unavailable: ${data.missingMarkets.join(", ")}.`
+            ? fmt(t.admin.syncSummaryUnavailable, { markets: data.missingMarkets.join(", ") })
             : "")
       );
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to sync matches and multipliers.");
+      setMessage(err instanceof Error ? err.message : t.admin.syncFailed);
       setMessageType("error");
     } finally {
       setSyncing(false);
@@ -82,12 +90,12 @@ export function AdminClient({
         body: JSON.stringify({ pickId, status }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMessage(`Pick marked as ${status}.`);
+      if (!res.ok) throw new Error(data.error ? te(data.error) : t.common.failed);
+      setMessage(fmt(t.admin.pickMarked, { status: t.pickStatus[status] }));
       setMessageType("success");
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed");
+      setMessage(err instanceof Error ? err.message : t.common.failed);
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -113,12 +121,12 @@ export function AdminClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error ? te(data.error) : t.common.failed);
       setForm({ teamA: "", teamB: "", startTime: "", multiplierTeamA: "1.5", multiplierDraw: "3.0", multiplierTeamB: "2.5" });
-      setMessage("Match created!");
+      setMessage(t.admin.matchCreated);
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed");
+      setMessage(err instanceof Error ? err.message : t.common.failed);
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -143,12 +151,12 @@ export function AdminClient({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMessage("Match settled and points recalculated!");
+      if (!res.ok) throw new Error(data.error ? te(data.error) : t.common.failed);
+      setMessage(t.admin.matchSettled);
       setEditingId(null);
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed");
+      setMessage(err instanceof Error ? err.message : t.common.failed);
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -156,54 +164,54 @@ export function AdminClient({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this match and all picks?")) return;
+    if (!confirm(t.admin.deleteMatchConfirm)) return;
     await fetch(`/api/admin/matches?id=${id}`, { method: "DELETE" });
     await refresh();
   }
 
   async function handleResetPoints() {
-    if (!confirm("Reset ALL users to starting points?")) return;
+    if (!confirm(t.admin.resetPointsConfirm)) return;
     await fetch("/api/admin/matches", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "reset_points" }),
     });
-    setMessage("All user points reset!");
+    setMessage(t.admin.pointsReset);
     setMessageType("success");
   }
 
   return (
     <div className="space-y-8">
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-2">Sync The Odds API</h2>
+        <h2 className="text-lg font-bold text-white mb-2">{t.admin.syncApiTitle}</h2>
         <p className="text-sm text-slate-400 mb-4">
-          Automatically import matches and market multipliers from The Odds API. Virtual points only — no real money.
+          {t.admin.syncApiDesc}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={handleSync} disabled={syncing || loading} className="btn-primary">
-            {syncing ? "Syncing..." : "Sync The Odds API Markets"}
+            {syncing ? t.admin.syncing : t.admin.syncMarkets}
           </button>
           <span className="text-sm text-slate-400">
-            Last synced: {syncedAt ? format(new Date(syncedAt), "PPp") : "Never synced"}
+            {t.admin.lastSynced}: {syncedAt ? format(new Date(syncedAt), "PPp", { locale: dateLocale }) : t.admin.neverSynced}
           </span>
         </div>
         {syncSummary && <p className="text-xs text-slate-500 mt-3">{syncSummary}</p>}
       </div>
 
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-2">Manual Markets</h2>
+        <h2 className="text-lg font-bold text-white mb-2">{t.admin.manualMarketsTitle}</h2>
         <p className="text-sm text-slate-400 mb-4">
-          Enter advanced markets (handicap, corners, BTTS, correct score, etc.) from any source. Virtual points only.
+          {t.admin.manualMarketsDesc}
         </p>
         <div className="flex flex-wrap gap-3">
-          <a href="/admin/manual-markets" className="btn-primary">Manual Market Entry</a>
-          <a href="/admin/manual-settlement" className="btn-secondary">Manual Settlement</a>
+          <a href="/admin/manual-markets" className="btn-primary">{t.admin.manualMarketEntry}</a>
+          <a href="/admin/manual-settlement" className="btn-secondary">{t.admin.manualSettlement}</a>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <a href="/api/admin/export" className="btn-secondary">Export Leaderboard CSV</a>
-        <button onClick={handleResetPoints} className="btn-danger">Reset All Points</button>
+        <a href="/api/admin/export" className="btn-secondary">{t.admin.exportCsv}</a>
+        <button onClick={handleResetPoints} className="btn-danger">{t.admin.resetAllPoints}</button>
       </div>
 
       {message && (
@@ -217,26 +225,26 @@ export function AdminClient({
       )}
 
       <div className="card">
-        <h2 className="text-lg font-bold text-white mb-4">Add Match Manually</h2>
+        <h2 className="text-lg font-bold text-white mb-4">{t.admin.addMatchTitle}</h2>
         <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-2">
-          <input className="input" placeholder="Team A" value={form.teamA} onChange={(e) => setForm({ ...form, teamA: e.target.value })} required />
-          <input className="input" placeholder="Team B" value={form.teamB} onChange={(e) => setForm({ ...form, teamB: e.target.value })} required />
+          <input className="input" placeholder={t.admin.teamA} value={form.teamA} onChange={(e) => setForm({ ...form, teamA: e.target.value })} required />
+          <input className="input" placeholder={t.admin.teamB} value={form.teamB} onChange={(e) => setForm({ ...form, teamB: e.target.value })} required />
           <input className="input sm:col-span-2" type="datetime-local" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
-          <button type="submit" disabled={loading} className="btn-primary sm:col-span-2">Create Match</button>
+          <button type="submit" disabled={loading} className="btn-primary sm:col-span-2">{t.admin.createMatch}</button>
         </form>
       </div>
 
       <div className="space-y-4">
-        <h2 className="section-title">All Matches</h2>
+        <h2 className="section-title">{t.admin.allMatches}</h2>
         {matches.map((match) => (
           <div key={match.id} className="card">
             <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
               <div>
-                <h3 className="text-lg font-bold text-white">{match.teamA} vs {match.teamB}</h3>
+                <h3 className="text-lg font-bold text-white">{match.teamA} {t.matches.vs} {match.teamB}</h3>
                 <p className="text-sm text-slate-400">
-                  {format(new Date(match.startTime), "PPp")} · {match.status}
-                  {match.scoreA !== null && ` · FT ${match.scoreA}-${match.scoreB}`}
-                  {match.scoreHalfA !== null && ` · HT ${match.scoreHalfA}-${match.scoreHalfB}`}
+                  {format(new Date(match.startTime), "PPp", { locale: dateLocale })} · {t.matchStatus[match.status]}
+                  {match.scoreA !== null && ` · ${t.admin.ft} ${match.scoreA}-${match.scoreB}`}
+                  {match.scoreHalfA !== null && ` · ${t.admin.ht} ${match.scoreHalfA}-${match.scoreHalfB}`}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -252,23 +260,23 @@ export function AdminClient({
                   }}
                   className="btn-secondary text-sm"
                 >
-                  {editingId === match.id ? "Cancel" : "Set Result"}
+                  {editingId === match.id ? t.common.cancel : t.admin.setResult}
                 </button>
                 <button onClick={() => setExpandedMarkets(expandedMarkets === match.id ? null : match.id)} className="btn-secondary text-sm">
-                  Markets ({match.markets.length})
+                  {fmt(t.admin.marketsCount, { count: match.markets.length })}
                 </button>
-                <button onClick={() => handleDelete(match.id)} className="btn-danger text-sm">Delete</button>
+                <button onClick={() => handleDelete(match.id)} className="btn-danger text-sm">{t.admin.delete}</button>
               </div>
             </div>
 
             {editingId === match.id && (
               <div className="flex flex-wrap gap-2 mb-4 p-3 rounded-lg bg-slate-800/50">
-                <input className="input w-20" type="number" min={0} placeholder="FT A" value={scoreForm.scoreA} onChange={(e) => setScoreForm({ ...scoreForm, scoreA: e.target.value })} />
-                <input className="input w-20" type="number" min={0} placeholder="FT B" value={scoreForm.scoreB} onChange={(e) => setScoreForm({ ...scoreForm, scoreB: e.target.value })} />
-                <input className="input w-20" type="number" min={0} placeholder="HT A" value={scoreForm.scoreHalfA} onChange={(e) => setScoreForm({ ...scoreForm, scoreHalfA: e.target.value })} />
-                <input className="input w-20" type="number" min={0} placeholder="HT B" value={scoreForm.scoreHalfB} onChange={(e) => setScoreForm({ ...scoreForm, scoreHalfB: e.target.value })} />
+                <input className="input w-20" type="number" min={0} placeholder={`${t.admin.ft} A`} value={scoreForm.scoreA} onChange={(e) => setScoreForm({ ...scoreForm, scoreA: e.target.value })} />
+                <input className="input w-20" type="number" min={0} placeholder={`${t.admin.ft} B`} value={scoreForm.scoreB} onChange={(e) => setScoreForm({ ...scoreForm, scoreB: e.target.value })} />
+                <input className="input w-20" type="number" min={0} placeholder={`${t.admin.ht} A`} value={scoreForm.scoreHalfA} onChange={(e) => setScoreForm({ ...scoreForm, scoreHalfA: e.target.value })} />
+                <input className="input w-20" type="number" min={0} placeholder={`${t.admin.ht} B`} value={scoreForm.scoreHalfB} onChange={(e) => setScoreForm({ ...scoreForm, scoreHalfB: e.target.value })} />
                 <button onClick={() => handleSettle(match.id)} disabled={loading} className="btn-primary text-sm">
-                  Save & Recalculate
+                  {t.admin.saveRecalculate}
                 </button>
               </div>
             )}
@@ -276,12 +284,12 @@ export function AdminClient({
             {expandedMarkets === match.id && (
               <div className="mb-4 space-y-3">
                 {match.markets.length === 0 ? (
-                  <p className="text-sm text-slate-500">No markets yet. Sync from The Odds API or use Bulk Market Entry below.</p>
+                  <p className="text-sm text-slate-500">{t.admin.noMarketsYet}</p>
                 ) : (
                   match.markets.map((market) => (
                     <div key={market.id} className="rounded-lg bg-slate-800/40 p-3">
                       <p className="text-sm font-semibold text-white mb-2">
-                        {MARKET_TYPE_LABELS[market.type as MarketType]} · {market.provider === "MANUAL" ? "Manual" : market.provider === "THEODDSAPI" ? "The Odds API" : market.provider} ({market.options.length} options)
+                        {t.markets[market.type as MarketType]} · {market.provider === "MANUAL" ? t.admin.manualSource : market.provider === "THEODDSAPI" ? t.admin.apiSource : market.provider} ({fmt(t.admin.optionsCount, { count: market.options.length })})
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {market.options.map((opt) => (
@@ -293,7 +301,7 @@ export function AdminClient({
                     </div>
                   ))
                 )}
-                <p className="text-xs text-amber-400/80">Advanced markets may require admin settlement.</p>
+                <p className="text-xs text-amber-400/80">{t.admin.advancedSettlementHint}</p>
               </div>
             )}
 
@@ -302,12 +310,12 @@ export function AdminClient({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-slate-400 text-left">
-                      <th className="py-2 pr-4">User</th>
-                      <th className="py-2 pr-4">Market</th>
-                      <th className="py-2 pr-4">Pick</th>
-                      <th className="py-2 pr-4">Risked</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2">Actions</th>
+                      <th className="py-2 pr-4">{t.admin.user}</th>
+                      <th className="py-2 pr-4">{t.admin.market}</th>
+                      <th className="py-2 pr-4">{t.admin.pick}</th>
+                      <th className="py-2 pr-4">{t.admin.risked}</th>
+                      <th className="py-2 pr-4">{t.admin.status}</th>
+                      <th className="py-2">{t.admin.actions}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -315,20 +323,20 @@ export function AdminClient({
                       <tr key={pick.id} className="border-t border-slate-800">
                         <td className="py-2 pr-4 text-white">{pick.user.name}</td>
                         <td className="py-2 pr-4 text-slate-400">
-                          {pick.market ? MARKET_TYPE_LABELS[pick.market.type as MarketType] : "Legacy"}
+                          {pick.market ? t.markets[pick.market.type as MarketType] : t.admin.legacy}
                         </td>
                         <td className="py-2 pr-4 text-slate-300">{pick.marketOption?.label ?? pick.selectedOutcome}</td>
                         <td className="py-2 pr-4 text-slate-300">{pick.pointsRisked}</td>
                         <td className={`py-2 pr-4 font-semibold ${
                           pick.status === "WON" ? "text-emerald-400" : pick.status === "LOST" ? "text-red-400" : "text-amber-400"
                         }`}>
-                          {pick.status}
+                          {t.pickStatus[pick.status]}
                         </td>
                         <td className="py-2">
                           {pick.status === "PENDING" && (
                             <div className="flex gap-1">
-                              <button onClick={() => handleManualSettle(pick.id, "WON")} className="text-xs text-emerald-400 hover:underline">Win</button>
-                              <button onClick={() => handleManualSettle(pick.id, "LOST")} className="text-xs text-red-400 hover:underline">Loss</button>
+                              <button onClick={() => handleManualSettle(pick.id, "WON")} className="text-xs text-emerald-400 hover:underline">{t.admin.win}</button>
+                              <button onClick={() => handleManualSettle(pick.id, "LOST")} className="text-xs text-red-400 hover:underline">{t.admin.loss}</button>
                             </div>
                           )}
                         </td>

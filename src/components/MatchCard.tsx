@@ -1,6 +1,10 @@
+"use client";
+
 import { format } from "date-fns";
-import type { Match, Market, MarketOption, Pick } from "@prisma/client";
-import { MARKET_TYPE_LABELS, type MarketType } from "@/lib/markets";
+import type { Match, Market, MarketOption, Pick, MatchStatus } from "@prisma/client";
+import type { MarketType } from "@/lib/markets";
+import { useI18n } from "@/i18n/context";
+import { getDateFnsLocale } from "@/i18n/dates";
 
 type MatchCardProps = {
   match: Match & {
@@ -11,25 +15,39 @@ type MatchCardProps = {
   showPickButton?: boolean;
 };
 
-const statusStyles = {
+const statusStyles: Record<MatchStatus, string> = {
   UPCOMING: "badge-pending",
   LIVE: "badge-live",
   FINISHED: "badge-finished",
 };
 
 export function MatchCard({ match, onPick, showPickButton = true }: MatchCardProps) {
+  const { t, locale, fmt } = useI18n();
   const picks = match.picks ?? [];
   const locked = match.status !== "UPCOMING" || new Date(match.startTime) <= new Date();
   const marketCount = match.markets?.length ?? 0;
+  const dateLocale = getDateFnsLocale(locale);
+
+  function marketLabel(type: MarketType) {
+    return t.markets[type];
+  }
+
+  function outcomeLabel(pick: NonNullable<MatchCardProps["match"]["picks"]>[0]) {
+    if (pick.marketOption?.label) return pick.marketOption.label;
+    if (pick.selectedOutcome === "TEAM_A") return match.teamA;
+    if (pick.selectedOutcome === "TEAM_B") return match.teamB;
+    if (pick.selectedOutcome === "DRAW") return t.outcomes.draw;
+    return t.common.na;
+  }
 
   return (
     <div className="card hover:border-slate-600 transition">
       <div className="flex items-center justify-between mb-3">
         <span className={`badge ${statusStyles[match.status]}`}>
-          {match.status.toLowerCase()}
+          {t.matchStatus[match.status]}
         </span>
         <span className="text-xs text-slate-500">
-          {format(new Date(match.startTime), "MMM d · h:mm a")}
+          {format(new Date(match.startTime), "MMM d · HH:mm", { locale: dateLocale })}
         </span>
       </div>
 
@@ -40,7 +58,7 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
             <p className="text-3xl font-black text-emerald-400 mt-1">{match.scoreA}</p>
           )}
         </div>
-        <div className="text-slate-500 font-bold">VS</div>
+        <div className="text-slate-500 font-bold">{t.matches.vs}</div>
         <div className="flex-1 text-center">
           <p className="font-bold text-lg text-white">{match.teamB}</p>
           {match.status === "FINISHED" && match.scoreB !== null && (
@@ -51,7 +69,9 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
 
       {marketCount > 0 && (
         <p className="text-xs text-slate-500 mt-3">
-          {marketCount} market{marketCount !== 1 ? "s" : ""} available
+          {fmt(marketCount === 1 ? t.matches.marketAvailable : t.matches.marketsAvailable, {
+            count: marketCount,
+          })}
         </p>
       )}
 
@@ -70,9 +90,7 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
             >
               <div className="flex justify-between">
                 <span className="text-slate-400">
-                  {pick.market
-                    ? MARKET_TYPE_LABELS[pick.market.type as MarketType]
-                    : "Pick"}
+                  {pick.market ? marketLabel(pick.market.type as MarketType) : t.dashboard.pick}
                 </span>
                 <span
                   className={`font-semibold ${
@@ -83,22 +101,13 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
                         : "text-amber-400"
                   }`}
                 >
-                  {pick.status}
+                  {t.pickStatus[pick.status]}
                 </span>
               </div>
               <div className="flex justify-between mt-1">
-                <span className="text-white">
-                  {pick.marketOption?.label ??
-                    (pick.selectedOutcome === "TEAM_A"
-                      ? match.teamA
-                      : pick.selectedOutcome === "TEAM_B"
-                        ? match.teamB
-                        : pick.selectedOutcome === "DRAW"
-                          ? "Draw"
-                          : "—")}
-                </span>
+                <span className="text-white">{outcomeLabel(pick)}</span>
                 <span className="text-slate-400">
-                  {pick.pointsRisked} pts @ x{pick.multiplier}
+                  {pick.pointsRisked} {t.nav.points} @ x{pick.multiplier}
                 </span>
               </div>
             </div>
@@ -112,7 +121,13 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
           className={`mt-4 w-full ${locked && picks.length === 0 ? "btn-secondary opacity-50 cursor-not-allowed" : "btn-primary"}`}
           disabled={locked && picks.length === 0}
         >
-          {picks.length > 0 ? (locked ? "Picks Locked" : "Make / Edit Picks") : locked ? "Locked" : "Make Pick"}
+          {picks.length > 0
+            ? locked
+              ? t.matches.picksLocked
+              : t.matches.makeEditPicks
+            : locked
+              ? t.matches.locked
+              : t.matches.makePick}
         </button>
       )}
     </div>

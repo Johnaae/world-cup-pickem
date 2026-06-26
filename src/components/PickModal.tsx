@@ -3,14 +3,9 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import type { Match, Market, MarketOption, Pick } from "@prisma/client";
-import {
-  PICK_TABS,
-  TAB_LABELS,
-  TAB_MARKET_TYPES,
-  MARKET_TYPE_LABELS,
-  type PickTab,
-  type MarketType,
-} from "@/lib/markets";
+import { PICK_TABS, TAB_MARKET_TYPES, type PickTab, type MarketType } from "@/lib/markets";
+import { useI18n } from "@/i18n/context";
+import { getDateFnsLocale } from "@/i18n/dates";
 
 export type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -30,6 +25,7 @@ type OptionWithMarket = MarketOption & { market: Market };
 const PRESET_AMOUNTS = [10, 25, 50, 100];
 
 export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: PickModalProps) {
+  const { t, locale, fmt, te } = useI18n();
   const [activeTab, setActiveTab] = useState<PickTab>("winner");
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [amount, setAmount] = useState(25);
@@ -37,6 +33,7 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
   const [useCustom, setUseCustom] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const dateLocale = getDateFnsLocale(locale);
 
   const locked = match.status !== "UPCOMING" || new Date(match.startTime) <= new Date();
   const pointsRisked = useCustom ? parseInt(customAmount, 10) || 0 : amount;
@@ -77,7 +74,13 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
   const multiplier = selectedOption?.multiplier ?? 0;
   const potentialProfit = Math.round(pointsRisked * multiplier);
   const showManualHint = activeMarkets.some((m) => m.provider === "MANUAL" || m.bookmaker === "Manual");
-  const needsManualSettlement = activeTab === "firstHalf" || activeTab === "correctScore" || activeTab === "btts" || activeTab === "corners" || activeTab === "cards" || activeTab === "live";
+  const needsManualSettlement =
+    activeTab === "firstHalf" ||
+    activeTab === "correctScore" ||
+    activeTab === "btts" ||
+    activeTab === "corners" ||
+    activeTab === "cards" ||
+    activeTab === "live";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,11 +95,11 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
         body: JSON.stringify({ marketOptionId: selectedOptionId, pointsRisked }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save pick");
+      if (!res.ok) throw new Error(te(data.error));
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : t.common.somethingWrong);
     } finally {
       setLoading(false);
     }
@@ -107,9 +110,10 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
       <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold text-white">Make Your Pick</h2>
+            <h2 className="text-xl font-bold text-white">{t.pick.title}</h2>
             <p className="text-slate-400 text-sm">
-              {match.teamA} vs {match.teamB} · {format(new Date(match.startTime), "EEE, MMM d · h:mm a")}
+              {match.teamA} vs {match.teamB} ·{" "}
+              {format(new Date(match.startTime), "EEE, MMM d · HH:mm", { locale: dateLocale })}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">
@@ -119,7 +123,7 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
 
         {locked ? (
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-300">
-            This match has started. Picks are locked.
+            {t.pick.lockedMessage}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -146,21 +150,21 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                             : "bg-slate-900 text-slate-600 cursor-not-allowed"
                     }`}
                   >
-                    {TAB_LABELS[tab]}
-                    {!hasOptions && <span className="block text-[10px] font-normal">N/A</span>}
+                    {t.pickTabs[tab]}
+                    {!hasOptions && (
+                      <span className="block text-[10px] font-normal">{t.pick.notAvailable}</span>
+                    )}
                   </button>
                 );
               })}
             </div>
 
             {!tabAvailable ? (
-              <p className="text-sm text-slate-400 py-4 text-center">
-                No active options for this market.
-              </p>
+              <p className="text-sm text-slate-400 py-4 text-center">{t.pick.noActiveOptions}</p>
             ) : (
               <>
                 {showManualHint && (
-                  <p className="text-xs text-slate-500">Manual source</p>
+                  <p className="text-xs text-slate-500">{t.pick.manualSource}</p>
                 )}
 
                 {activeTab === "firstHalf" || activeTab === "corners" || activeTab === "live" ? (
@@ -168,9 +172,11 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                     {activeMarkets.map((market) => (
                       <div key={market.id}>
                         <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
-                          {MARKET_TYPE_LABELS[market.type as MarketType]}
+                          {t.markets[market.type as MarketType]}
                           {(market.provider === "MANUAL" || market.bookmaker === "Manual") && (
-                            <span className="ml-2 normal-case text-slate-600">· Manual</span>
+                            <span className="ml-2 normal-case text-slate-600">
+                              · {t.pick.manualSource}
+                            </span>
                           )}
                         </p>
                         <OptionGrid
@@ -197,13 +203,11 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                 )}
 
                 {needsManualSettlement && (
-                  <p className="text-xs text-amber-400/80">
-                    Advanced markets may require admin settlement.
-                  </p>
+                  <p className="text-xs text-amber-400/80">{t.pick.advancedSettlementHint}</p>
                 )}
 
                 <div>
-                  <p className="text-sm text-slate-400 mb-2">Points to risk</p>
+                  <p className="text-sm text-slate-400 mb-2">{t.pick.pointsToRisk}</p>
                   <div className="grid grid-cols-4 gap-2 mb-2">
                     {PRESET_AMOUNTS.map((preset) => (
                       <button
@@ -225,7 +229,7 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                     onClick={() => setUseCustom(true)}
                     className={`amount-btn w-full ${useCustom ? "amount-btn-active" : ""}`}
                   >
-                    Custom
+                    {t.pick.custom}
                   </button>
                   {useCustom && (
                     <input
@@ -234,7 +238,7 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                       max={userPoints}
                       value={customAmount}
                       onChange={(e) => setCustomAmount(e.target.value)}
-                      placeholder={`Max ${userPoints}`}
+                      placeholder={fmt(t.pick.maxPoints, { max: userPoints })}
                       className="input mt-2"
                     />
                   )}
@@ -243,16 +247,18 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                 {selectedOption && (
                   <div className="rounded-lg bg-slate-800/50 p-3 text-sm">
                     <div className="flex justify-between text-slate-400">
-                      <span>Multiplier</span>
+                      <span>{t.pick.multiplier}</span>
                       <span className="text-white">x{multiplier}</span>
                     </div>
                     <div className="flex justify-between text-slate-400 mt-1">
-                      <span>Potential profit</span>
+                      <span>{t.pick.potentialProfit}</span>
                       <span className="text-emerald-400 font-semibold">+{potentialProfit}</span>
                     </div>
                     <div className="flex justify-between text-slate-400 mt-1">
-                      <span>Your balance</span>
-                      <span className="text-white">{userPoints.toLocaleString()} pts</span>
+                      <span>{t.pick.balance}</span>
+                      <span className="text-white">
+                        {userPoints.toLocaleString()} {t.nav.points}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -261,15 +267,14 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
 
                 <button
                   type="submit"
-                  disabled={
-                    loading ||
-                    !selectedOptionId ||
-                    pointsRisked < 1 ||
-                    pointsRisked > userPoints
-                  }
+                  disabled={loading || !selectedOptionId || pointsRisked < 1 || pointsRisked > userPoints}
                   className="btn-primary w-full"
                 >
-                  {loading ? "Saving..." : existingPickForMarket ? "Update Pick" : "Confirm Pick"}
+                  {loading
+                    ? t.pick.saving
+                    : existingPickForMarket
+                      ? t.pick.updatePick
+                      : t.pick.confirmPick}
                 </button>
               </>
             )}
@@ -291,14 +296,19 @@ function OptionGrid({
   onSelect: (id: string) => void;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
       {options.map((option) => {
         const isActive = option.status === "ACTIVE";
         const isSelected = selectedId === option.id && isActive;
         const statusLabel =
-          option.status === "SUSPENDED" ? "Suspended" :
-          option.status === "CLOSED" ? "Closed" : null;
+          option.status === "SUSPENDED"
+            ? t.optionStatus.SUSPENDED
+            : option.status === "CLOSED"
+              ? t.optionStatus.CLOSED
+              : null;
 
         return (
           <button

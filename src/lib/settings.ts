@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 
 const DEFAULT_DISCLAIMER =
-  "For entertainment purposes only. No real-money betting. No payments. No cash prizes. Points have no monetary value.";
+  "Chỉ mang tính giải trí. Không cá cược tiền thật. Không thanh toán. Không có giải thưởng bằng tiền. Điểm không có giá trị quy đổi.";
 
 export async function getAppSettings() {
   let settings = await prisma.appSettings.findUnique({ where: { id: "default" } });

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MatchCard } from "./MatchCard";
 import { PickModal, type MatchWithMarkets } from "./PickModal";
+import { useI18n } from "@/i18n/context";
 
 type MatchesClientProps = {
   initialMatches: MatchWithMarkets[];
@@ -10,6 +11,7 @@ type MatchesClientProps = {
 };
 
 export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps) {
+  const { t } = useI18n();
   const [matches, setMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchWithMarkets | null>(null);
   const [points, setPoints] = useState(userPoints);
@@ -29,9 +31,9 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
   return (
     <>
       <section className="mb-8">
-        <h2 className="section-title">Upcoming & Live</h2>
+        <h2 className="section-title">{t.matches.upcomingLive}</h2>
         {upcoming.length === 0 ? (
-          <p className="text-slate-400">No upcoming matches.</p>
+          <p className="text-slate-400">{t.matches.noUpcoming}</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {upcoming.map((match) => (
@@ -42,9 +44,9 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
       </section>
 
       <section>
-        <h2 className="section-title">Results</h2>
+        <h2 className="section-title">{t.matches.results}</h2>
         {finished.length === 0 ? (
-          <p className="text-slate-400">No finished matches yet.</p>
+          <p className="text-slate-400">{t.matches.noFinished}</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {finished.map((match) => (

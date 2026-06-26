@@ -187,7 +187,7 @@ model PointsTransaction {
 model AppSettings {
   id             String    @id @default("default")
   startingPoints Int       @default(1000)
-  disclaimer     String    @default("For entertainment purposes only. No real-money betting. No payments. No cash prizes. Points have no monetary value.")
+  disclaimer     String    @default("Chỉ mang tính giải trí. Không cá cược tiền thật. Không thanh toán. Không có giải thưởng bằng tiền. Điểm không có giá trị quy đổi.")
   inviteCode     String    @default("WORLDCUP2026")
   lastOddsSyncAt DateTime?
   oddsProvider   String?
