@@ -68,6 +68,8 @@ export type Dictionary = {
     makeLivePick: string;
     refreshOdds: string;
     refresh: string;
+    refreshing: string;
+    oddsRefreshed: string;
     score: string;
     scoreUnavailable: string;
     oddsLastUpdated: string;

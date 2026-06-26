@@ -8,28 +8,74 @@ import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { getMatchLastSyncedAt } from "@/lib/odds/staleness";
 
+type RefreshResult = { ok: boolean; error?: string };
+
 type MatchesClientProps = {
   initialMatches: MatchWithMarkets[];
   userPoints: number;
 };
 
 export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps) {
-  const { t, locale } = useI18n();
+  const { t, locale, te } = useI18n();
   const dateLocale = getDateFnsLocale(locale);
   const [matches, setMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchWithMarkets | null>(null);
   const [points, setPoints] = useState(userPoints);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [toast, setToast] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/matches");
+    if (!res.ok) return;
     const data = await res.json();
-    setMatches(data.matches);
+    if (data.matches) setMatches(data.matches);
     setLastRefreshedAt(new Date());
     const sessionRes = await fetch("/api/auth/session");
-    const sessionData = await sessionRes.json();
-    if (sessionData.user) setPoints(sessionData.user.points);
+    if (sessionRes.ok) {
+      const sessionData = await sessionRes.json();
+      if (sessionData.user) setPoints(sessionData.user.points);
+    }
   }, []);
+
+  const refreshOddsForMatch = useCallback(
+    async (matchId: string): Promise<RefreshResult> => {
+      try {
+        const res = await fetch("/api/admin/sync-match-odds", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ matchId }),
+        });
+
+        let data: { ok?: boolean; error?: string } = {};
+        try {
+          data = await res.json();
+        } catch {
+          return { ok: false, error: t.common.somethingWrong };
+        }
+
+        if (!data.ok) {
+          return { ok: false, error: data.error ? te(data.error) : t.common.failed };
+        }
+
+        await refresh();
+        setToast(t.matches.oddsRefreshed);
+        return { ok: true };
+      } catch (err) {
+        console.error("[MatchesClient] refresh odds failed:", err);
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : t.common.somethingWrong,
+        };
+      }
+    },
+    [refresh, t, te]
+  );
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   const hasLive = matches.some((m) => m.status === "LIVE");
   const hasUpcoming = matches.some((m) => m.status === "UPCOMING");
@@ -47,17 +93,6 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
     if (updated) setSelectedMatch(updated);
   }, [matches, selectedMatch?.id]);
 
-  const refreshOddsForMatch = useCallback(async (matchId: string) => {
-    const res = await fetch("/api/matches/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? "Refresh failed");
-    await refresh();
-  }, [refresh]);
-
   const globalLastSynced = useMemo(() => {
     let latest: Date | null = null;
     for (const m of matches) {
@@ -73,6 +108,12 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
 
   return (
     <>
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-300 shadow-lg">
+          {toast}
+        </div>
+      )}
+
       {(hasLive || hasUpcoming) && (
         <p className="text-xs text-slate-500 mb-4">
           {t.pick.lastUpdated}:{" "}

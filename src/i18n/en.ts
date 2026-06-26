@@ -85,6 +85,8 @@ export const en: Dictionary = {
     makeLivePick: "Live pick",
     refreshOdds: "Refresh odds",
     refresh: "Refresh",
+    refreshing: "Refreshing...",
+    oddsRefreshed: "Odds refreshed",
     score: "Score",
     scoreUnavailable: "not available",
     oddsLastUpdated: "Odds last updated",

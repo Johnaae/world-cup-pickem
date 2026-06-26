@@ -85,6 +85,8 @@ export const vi: Dictionary = {
     makeLivePick: "Chọn kèo live",
     refreshOdds: "Làm mới kèo",
     refresh: "Làm mới",
+    refreshing: "Đang làm mới...",
+    oddsRefreshed: "Đã làm mới kèo",
     score: "Tỷ số",
     scoreUnavailable: "chưa có",
     oddsLastUpdated: "Cập nhật kèo lần cuối",

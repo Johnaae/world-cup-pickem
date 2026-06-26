@@ -1,0 +1,57 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { OddsProviderError, syncMatchOdds, markStaleApiOptions } from "@/lib/odds";
+
+const schema = z.object({
+  matchId: z.string().min(1),
+});
+
+export async function POST(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error("[sync-match-odds] Invalid JSON body:", parseError);
+      return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { matchId } = schema.parse(body);
+
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match) {
+      return NextResponse.json({ ok: false, error: "Match not found" }, { status: 404 });
+    }
+
+    if (match.status !== "LIVE" && match.status !== "UPCOMING") {
+      return NextResponse.json({ ok: false, error: "MATCH_FINISHED" }, { status: 400 });
+    }
+
+    await syncMatchOdds(matchId);
+    await markStaleApiOptions();
+
+    return NextResponse.json({
+      ok: true,
+      matchId,
+      lastSyncedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[sync-match-odds] Failed:", error);
+
+    if (error instanceof OddsProviderError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.statusCode });
+    }
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ ok: false, error: error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+    }
+    const message = error instanceof Error ? error.message : "Failed to refresh odds";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}

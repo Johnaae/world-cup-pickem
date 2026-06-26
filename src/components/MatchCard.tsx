@@ -12,13 +12,15 @@ import {
   type MatchWithMarkets,
 } from "@/lib/matchPickability";
 
+type RefreshResult = { ok: boolean; error?: string };
+
 type MatchCardProps = {
   match: Match & {
     markets?: (Market & { options: MarketOption[] })[];
     picks?: (Pick & { market?: Market | null; marketOption?: MarketOption | null })[];
   };
   onPick?: () => void;
-  onRefreshOdds?: (matchId: string) => Promise<void>;
+  onRefreshOdds?: (matchId: string) => Promise<RefreshResult>;
   showPickButton?: boolean;
 };
 
@@ -34,6 +36,7 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
   const marketCount = match.markets?.length ?? 0;
   const dateLocale = getDateFnsLocale(locale);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
 
   const buttonState = getMatchPickButtonState(match as MatchWithMarkets);
   const lastOddsSync = getMatchLastSyncedAt(
@@ -56,6 +59,7 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
   }
 
   function buttonLabel(): string {
+    if (refreshing) return t.matches.refreshing;
     if (picks.length > 0 && (buttonState === "pick" || buttonState === "pickLive")) {
       return t.matches.makeEditPicks;
     }
@@ -74,19 +78,36 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
     }
   }
 
-  const buttonDisabled =
-    buttonState === "finished" ||
-    buttonState === "locked" ||
-    refreshing;
+  const primaryDisabled =
+    refreshing || buttonState === "finished" || buttonState === "locked";
 
-  async function handleButtonClick() {
-    if (buttonState === "refreshOdds" && onRefreshOdds) {
-      setRefreshing(true);
-      try {
-        await onRefreshOdds(match.id);
-      } finally {
-        setRefreshing(false);
+  async function runRefresh(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onRefreshOdds || refreshing) return;
+
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      const result = await onRefreshOdds(match.id);
+      if (!result.ok) {
+        setRefreshError(result.error ?? t.common.failed);
       }
+    } catch (err) {
+      console.error("[MatchCard] refresh error:", err);
+      setRefreshError(err instanceof Error ? err.message : t.common.somethingWrong);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  function handlePrimaryClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (refreshing) return;
+
+    if (buttonState === "refreshOdds") {
+      void runRefresh(e);
       return;
     }
     if (buttonState === "pick" || buttonState === "pickLive") {
@@ -182,35 +203,32 @@ export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true 
         </div>
       )}
 
+      {refreshError && (
+        <p className="mt-3 text-xs text-red-400 text-center">{refreshError}</p>
+      )}
+
       {showPickButton && (onPick || onRefreshOdds) && (
         <div className="mt-4 flex gap-2">
           <button
-            onClick={handleButtonClick}
+            type="button"
+            onClick={handlePrimaryClick}
             className={`flex-1 ${
-              buttonDisabled && buttonState !== "refreshOdds"
+              primaryDisabled && buttonState !== "refreshOdds"
                 ? "btn-secondary opacity-50 cursor-not-allowed"
-                : buttonState === "refreshOdds"
-                  ? "btn-primary"
-                  : "btn-primary"
+                : "btn-primary"
             }`}
-            disabled={buttonDisabled}
+            disabled={primaryDisabled}
           >
-            {refreshing ? t.common.loading : buttonLabel()}
+            {buttonLabel()}
           </button>
           {match.status === "LIVE" && onRefreshOdds && buttonState !== "refreshOdds" && (
             <button
-              onClick={async () => {
-                setRefreshing(true);
-                try {
-                  await onRefreshOdds(match.id);
-                } finally {
-                  setRefreshing(false);
-                }
-              }}
+              type="button"
+              onClick={runRefresh}
               disabled={refreshing}
               className="btn-secondary shrink-0"
             >
-              {refreshing ? "…" : t.matches.refresh}
+              {refreshing ? t.matches.refreshing : t.matches.refresh}
             </button>
           )}
         </div>
