@@ -92,6 +92,9 @@ export type Dictionary = {
     notAvailable: string;
     maxMatchPointsExceeded: string;
     matchLimitRemaining: string;
+    lastUpdated: string;
+    oddsSyncedAt: string;
+    oddsNeedRefresh: string;
   };
   pickTabs: {
     winner: string;
@@ -168,6 +171,12 @@ export type Dictionary = {
     syncApiTitle: string;
     syncApiDesc: string;
     syncMarkets: string;
+    syncMatches: string;
+    syncOdds: string;
+    syncAll: string;
+    syncMatchOdds: string;
+    refreshOdds: string;
+    refreshOddsSuccess: string;
     syncing: string;
     lastSynced: string;
     neverSynced: string;
@@ -212,6 +221,14 @@ export type Dictionary = {
     ht: string;
     syncSummary: string;
     syncSummaryUnavailable: string;
+    suspendMatchOdds: string;
+    closeMatchOdds: string;
+    reopenMatchOdds: string;
+    oddsHistory: string;
+    noOddsHistory: string;
+    oldMultiplier: string;
+    newMultiplier: string;
+    changedAt: string;
   };
   manualMarkets: {
     title: string;

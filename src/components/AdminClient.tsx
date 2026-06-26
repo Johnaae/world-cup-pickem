@@ -6,6 +6,7 @@ import type { Match, Market, MarketOption, Pick as UserPick, User } from "@prism
 import type { MarketType } from "@/lib/markets";
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
+import { AdminSyncButtons } from "./AdminSyncButtons";
 
 type AdminMatch = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -39,10 +40,21 @@ export function AdminClient({
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [syncedAt, setSyncedAt] = useState(lastSyncedAt);
-  const [syncSummary, setSyncSummary] = useState<string | null>(null);
   const [expandedMarkets, setExpandedMarkets] = useState<string | null>(null);
+  const [historyMatchId, setHistoryMatchId] = useState<string | null>(null);
+  const [oddsHistory, setOddsHistory] = useState<
+    Array<{
+      id: string;
+      oldMultiplier: number;
+      newMultiplier: number;
+      changedAt: string;
+      source: string;
+      note: string | null;
+      marketOption: { label: string; market: { type: string; label: string } };
+    }>
+  >([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   async function refresh() {
     const res = await fetch("/api/admin/matches");
@@ -50,34 +62,45 @@ export function AdminClient({
     setMatches(data.matches);
   }
 
-  async function handleSync() {
-    setSyncing(true);
+  async function handleMatchMarketAction(matchId: string, action: string) {
+    setLoading(true);
     setMessage("");
-    setSyncSummary(null);
     try {
-      const res = await fetch("/api/admin/sync-odds");
+      const res = await fetch("/api/admin/match-markets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId, action }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ? te(data.error) : t.admin.syncFailed);
-      setMessage(t.admin.syncSuccess);
+      if (!res.ok) throw new Error(data.error ? te(data.error) : t.common.failed);
+      const actionLabels: Record<string, string> = {
+        suspend_all: t.admin.suspendMatchOdds,
+        close_all: t.admin.closeMatchOdds,
+        reopen_all: t.admin.reopenMatchOdds,
+        refresh_odds: t.admin.refreshOdds,
+      };
+      setMessage(actionLabels[action] ?? t.admin.syncSuccess);
       setMessageType("success");
-      setSyncedAt(data.lastSyncedAt ?? new Date().toISOString());
-      setSyncSummary(
-        fmt(t.admin.syncSummary, {
-          importedMatches: data.importedMatches,
-          updatedMatches: data.updatedMatches,
-          importedMarkets: data.importedMarkets,
-          updatedMarkets: data.updatedMarkets,
-        }) +
-          (data.missingMarkets?.length
-            ? fmt(t.admin.syncSummaryUnavailable, { markets: data.missingMarkets.join(", ") })
-            : "")
-      );
       await refresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : t.admin.syncFailed);
+      setMessage(err instanceof Error ? err.message : t.common.failed);
       setMessageType("error");
     } finally {
-      setSyncing(false);
+      setLoading(false);
+    }
+  }
+
+  async function loadOddsHistory(matchId: string) {
+    setHistoryMatchId(matchId);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/admin/match-markets?matchId=${matchId}`);
+      const data = await res.json();
+      setOddsHistory(data.history ?? []);
+    } catch {
+      setOddsHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -100,6 +123,12 @@ export function AdminClient({
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm(t.admin.deleteMatchConfirm)) return;
+    await fetch(`/api/admin/matches?id=${id}`, { method: "DELETE" });
+    await refresh();
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -163,12 +192,6 @@ export function AdminClient({
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm(t.admin.deleteMatchConfirm)) return;
-    await fetch(`/api/admin/matches?id=${id}`, { method: "DELETE" });
-    await refresh();
-  }
-
   async function handleResetPoints() {
     if (!confirm(t.admin.resetPointsConfirm)) return;
     await fetch("/api/admin/matches", {
@@ -184,18 +207,8 @@ export function AdminClient({
     <div className="space-y-8">
       <div className="card">
         <h2 className="text-lg font-bold text-white mb-2">{t.admin.syncApiTitle}</h2>
-        <p className="text-sm text-slate-400 mb-4">
-          {t.admin.syncApiDesc}
-        </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={handleSync} disabled={syncing || loading} className="btn-primary">
-            {syncing ? t.admin.syncing : t.admin.syncMarkets}
-          </button>
-          <span className="text-sm text-slate-400">
-            {t.admin.lastSynced}: {syncedAt ? format(new Date(syncedAt), "PPp", { locale: dateLocale }) : t.admin.neverSynced}
-          </span>
-        </div>
-        {syncSummary && <p className="text-xs text-slate-500 mt-3">{syncSummary}</p>}
+        <p className="text-sm text-slate-400 mb-4">{t.admin.syncApiDesc}</p>
+        <AdminSyncButtons lastSyncedAt={syncedAt} onSynced={refresh} />
       </div>
 
       <div className="card">
@@ -269,6 +282,45 @@ export function AdminClient({
                 </button>
                 <button onClick={() => handleDelete(match.id)} className="btn-danger text-sm">{t.admin.delete}</button>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button
+                onClick={() => handleMatchMarketAction(match.id, "suspend_all")}
+                disabled={loading}
+                className="btn-secondary text-xs"
+              >
+                {t.admin.suspendMatchOdds}
+              </button>
+              <button
+                onClick={() => handleMatchMarketAction(match.id, "close_all")}
+                disabled={loading}
+                className="btn-secondary text-xs"
+              >
+                {t.admin.closeMatchOdds}
+              </button>
+              {match.status === "UPCOMING" && (
+                <button
+                  onClick={() => handleMatchMarketAction(match.id, "reopen_all")}
+                  disabled={loading}
+                  className="btn-secondary text-xs"
+                >
+                  {t.admin.reopenMatchOdds}
+                </button>
+              )}
+              <button
+                onClick={() => handleMatchMarketAction(match.id, "refresh_odds")}
+                disabled={loading}
+                className="btn-primary text-xs"
+              >
+                {t.admin.refreshOdds}
+              </button>
+              <button
+                onClick={() => loadOddsHistory(match.id)}
+                className="btn-secondary text-xs"
+              >
+                {t.admin.oddsHistory}
+              </button>
             </div>
 
             {editingId === match.id && (
@@ -351,6 +403,49 @@ export function AdminClient({
           </div>
         ))}
       </div>
+
+      {historyMatchId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="card w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">{t.admin.oddsHistory}</h3>
+              <button onClick={() => setHistoryMatchId(null)} className="text-slate-400 hover:text-white text-2xl">×</button>
+            </div>
+            {historyLoading ? (
+              <p className="text-slate-400">{t.common.loading}</p>
+            ) : oddsHistory.length === 0 ? (
+              <p className="text-slate-400">{t.admin.noOddsHistory}</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-slate-400 text-left">
+                    <th className="py-2 pr-3">{t.admin.market}</th>
+                    <th className="py-2 pr-3">{t.admin.pick}</th>
+                    <th className="py-2 pr-3">{t.admin.oldMultiplier}</th>
+                    <th className="py-2 pr-3">{t.admin.newMultiplier}</th>
+                    <th className="py-2">{t.admin.changedAt}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oddsHistory.map((h) => (
+                    <tr key={h.id} className="border-t border-slate-800">
+                      <td className="py-2 pr-3 text-slate-300">
+                        {t.markets[h.marketOption.market.type as MarketType]}
+                      </td>
+                      <td className="py-2 pr-3 text-white">{h.marketOption.label}</td>
+                      <td className="py-2 pr-3 text-slate-400">x{h.oldMultiplier}</td>
+                      <td className="py-2 pr-3 text-emerald-400">x{h.newMultiplier}</td>
+                      <td className="py-2 text-slate-500 text-xs">
+                        {format(new Date(h.changedAt), "PPp", { locale: dateLocale })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

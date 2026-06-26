@@ -11,6 +11,7 @@ import {
 import { prisma } from "./prisma";
 import { canAutoSettle, getMatchResultOutcome, isOptionWinner, requiresManualSettlement } from "./markets";
 import { MAX_POINTS_PER_MATCH } from "./constants";
+import { assertOptionFreshForPick } from "./odds/staleness";
 
 export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   const profit = Math.round(pointsRisked * multiplier);
@@ -81,26 +82,33 @@ export async function createOrUpdatePick(params: {
   marketOptionId: string;
   pointsRisked: number;
 }) {
-  const option = await prisma.marketOption.findUnique({
+  const optionPreview = await prisma.marketOption.findUnique({
     where: { id: params.marketOptionId },
     include: { market: { include: { match: true } } },
   });
 
-  if (!option) throw new Error("Market option not found");
-  if (option.status !== "ACTIVE") throw new Error("This market option is not available");
+  if (!optionPreview) throw new Error("Market option not found");
 
-  const match = option.market.match;
+  const match = optionPreview.market.match;
   if (isMatchLocked(match)) throw new Error("Match has already started");
 
   const userCheck = await prisma.user.findUnique({ where: { id: params.userId } });
   if (!userCheck) throw new Error("User not found");
   if (userCheck.locked) throw new Error("Account is locked");
 
-  const multiplier = option.multiplier;
-  const marketId = option.marketId;
-  const selectedOutcome = legacyOutcomeFromOption(option, match);
+  const marketId = optionPreview.marketId;
+  const selectedOutcome = legacyOutcomeFromOption(optionPreview, match);
 
   return prisma.$transaction(async (tx) => {
+    const option = await tx.marketOption.findUnique({
+      where: { id: params.marketOptionId },
+      include: { market: { include: { match: true } } },
+    });
+    if (!option) throw new Error("Market option not found");
+
+    assertOptionFreshForPick(option, option.market.match);
+
+    const multiplier = option.multiplier;
     const user = await tx.user.findUnique({ where: { id: params.userId } });
     if (!user) throw new Error("User not found");
 

@@ -41,7 +41,7 @@ function getRequestedApiMarkets(): string[] {
   const raw =
     process.env.ODDS_API_MARKETS ||
     process.env.ODDS_API_MARKET ||
-    "h2h,spreads,totals,h2h_h1,spreads_h1,totals_h1,correct_score";
+    "h2h,spreads,totals";
   return raw.split(",").map((m) => m.trim()).filter(Boolean);
 }
 

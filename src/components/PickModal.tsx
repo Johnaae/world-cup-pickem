@@ -7,6 +7,7 @@ import { PICK_TABS, TAB_MARKET_TYPES, type PickTab, type MarketType } from "@/li
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { MAX_POINTS_PER_MATCH } from "@/lib/constants";
+import { isApiSourcedProvider, isOptionStale, getOptionSyncTime } from "@/lib/odds/staleness";
 
 export type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -71,6 +72,13 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
   const existingPickForMarket = selectedOption
     ? userPicks.find((p) => p.marketId === selectedOption.market.id)
     : null;
+
+  const selectedIsStale = selectedOption
+    ? isApiSourcedProvider(selectedOption.provider) &&
+      isOptionStale(selectedOption, match.status)
+    : false;
+
+  const selectedSyncTime = selectedOption ? getOptionSyncTime(selectedOption) : null;
 
   const multiplier = selectedOption?.multiplier ?? 0;
   const potentialProfit = Math.round(pointsRisked * multiplier);
@@ -286,6 +294,14 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                 )}
 
                 {error && <p className="text-red-400 text-sm">{error}</p>}
+                {selectedIsStale && !error && (
+                  <p className="text-amber-400 text-sm">{t.pick.oddsNeedRefresh}</p>
+                )}
+                {selectedSyncTime && selectedOption && isApiSourcedProvider(selectedOption.provider) && (
+                  <p className="text-xs text-slate-500">
+                    {t.pick.lastUpdated}: {format(selectedSyncTime, "HH:mm:ss", { locale: dateLocale })}
+                  </p>
+                )}
                 {exceedsMatchLimit && !error && (
                   <p className="text-red-400 text-sm">{t.pick.maxMatchPointsExceeded}</p>
                 )}
@@ -296,7 +312,8 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                     loading ||
                     !selectedOptionId ||
                     pointsRisked < 1 ||
-                    exceedsMatchLimit
+                    exceedsMatchLimit ||
+                    selectedIsStale
                   }
                   className="btn-primary w-full"
                 >

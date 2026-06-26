@@ -143,6 +143,8 @@ model MarketOption {
   provider       OddsProvider @default(MANUAL)
   bookmaker      String?
   sourceSyncedAt DateTime?
+  lastSyncedAt   DateTime?
+  isStale        Boolean      @default(false)
   status            OptionStatus      @default(ACTIVE)
   note              String?
   settlementResult  OptionSettlement  @default(UNSETTLED)
@@ -151,8 +153,22 @@ model MarketOption {
   updatedAt      DateTime     @updatedAt
   market         Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
   picks          Pick[]
+  oddsHistory    OddsHistory[]
 
   @@unique([marketId, label, pointLine])
+}
+
+model OddsHistory {
+  id             String       @id @default(cuid())
+  marketOptionId String
+  oldMultiplier  Float
+  newMultiplier  Float
+  changedAt      DateTime     @default(now())
+  source         OddsProvider
+  note           String?
+  marketOption   MarketOption @relation(fields: [marketOptionId], references: [id], onDelete: Cascade)
+
+  @@index([marketOptionId, changedAt])
 }
 
 model Pick {

@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { AI_SUPPORTED_MARKET_TYPES, MAX_IMAGES, type PreviewRow } from "@/lib/ai/types";
 import { decimalToMultiplier } from "@/lib/odds/utils";
+import { AdminSyncButtons } from "./AdminSyncButtons";
 
 type MatchOption = Pick<Match, "id" | "teamA" | "teamB" | "startTime" | "status">;
 
@@ -169,6 +170,11 @@ export function ImportImageClient({ matches }: { matches: MatchOption[] }) {
             ))
           )}
         </select>
+        {matchId && (
+          <div className="pt-2">
+            <AdminSyncButtons matchId={matchId} compact />
+          </div>
+        )}
       </div>
 
       <div className="card space-y-4">

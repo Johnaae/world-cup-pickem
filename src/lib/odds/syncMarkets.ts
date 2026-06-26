@@ -1,11 +1,22 @@
 import { MarketType, MatchStatus, OddsProvider, OptionStatus } from "@prisma/client";
 import { prisma } from "../prisma";
 import { MARKET_TYPE_LABELS, optionDedupeKey, teamPairKey } from "../markets";
+import { isOptionStale } from "./staleness";
 import type { NormalizedMatch, OddsProviderName, SyncResult } from "./types";
+
+export type SyncMode = "all" | "matches" | "odds";
+
+export type SyncOptions = {
+  mode?: SyncMode;
+  matchId?: string;
+  overwriteManual?: boolean;
+};
 
 type MatchWithMarkets = Awaited<
   ReturnType<typeof prisma.match.findMany<{ include: { markets: { include: { options: true } } } }>>
 >[number];
+
+const PROTECTED_PROVIDERS: OddsProvider[] = [OddsProvider.MANUAL, OddsProvider.AI_IMAGE];
 
 function toPrismaProvider(provider: OddsProviderName): OddsProvider {
   return provider as OddsProvider;
@@ -26,11 +37,54 @@ function extractWinnerMultipliers(match: NormalizedMatch) {
   };
 }
 
+function inferMatchStatus(
+  normalized: NormalizedMatch,
+  existing?: MatchWithMarkets
+): MatchStatus {
+  const startTime = normalized.startTime.getTime();
+  const now = Date.now();
+  const eventEnded = startTime < now - 3 * 60 * 60 * 1000;
+
+  if (eventEnded) return MatchStatus.FINISHED;
+  if (existing?.status === MatchStatus.FINISHED) return MatchStatus.FINISHED;
+  if (normalized.isLive) return MatchStatus.LIVE;
+  if (startTime <= now) return MatchStatus.LIVE;
+  return MatchStatus.UPCOMING;
+}
+
+async function logMultiplierChange(
+  optionId: string,
+  oldMultiplier: number,
+  newMultiplier: number,
+  source: OddsProvider,
+  note?: string
+) {
+  if (oldMultiplier === newMultiplier) return;
+  await prisma.oddsHistory.create({
+    data: {
+      marketOptionId: optionId,
+      oldMultiplier,
+      newMultiplier,
+      source,
+      note,
+    },
+  });
+}
+
+function isProtectedMarket(market: { provider: OddsProvider }, overwriteManual: boolean): boolean {
+  if (overwriteManual) return false;
+  return PROTECTED_PROVIDERS.includes(market.provider);
+}
+
 export async function syncNormalizedMatches(
   matches: NormalizedMatch[],
-  provider: OddsProviderName
+  provider: OddsProviderName,
+  options: SyncOptions = {}
 ): Promise<SyncResult> {
+  const mode = options.mode ?? "all";
+  const overwriteManual = options.overwriteManual ?? false;
   const missingMarketsSet = new Set<string>();
+
   const existingMatches = await prisma.match.findMany({
     include: { markets: { include: { options: true } } },
   });
@@ -38,17 +92,30 @@ export async function syncNormalizedMatches(
   const byExternalId = new Map(
     existingMatches.filter((m) => m.oddsApiId).map((m) => [m.oddsApiId!, m])
   );
-  const byTeamPair = new Map(
-    existingMatches.map((m) => [teamPairKey(m.teamA, m.teamB), m])
-  );
+  const byTeamPair = new Map(existingMatches.map((m) => [teamPairKey(m.teamA, m.teamB), m]));
+  const byId = new Map(existingMatches.map((m) => [m.id, m]));
+
+  let filtered = matches;
+  if (options.matchId) {
+    const target = byId.get(options.matchId);
+    filtered = matches.filter(
+      (m) =>
+        m.externalId === target?.oddsApiId ||
+        (target && teamPairKey(m.teamA, m.teamB) === teamPairKey(target.teamA, target.teamB))
+    );
+    if (filtered.length === 0 && target?.oddsApiId) {
+      filtered = matches.filter((m) => m.externalId === target.oddsApiId);
+    }
+  }
 
   let importedMatches = 0;
   let updatedMatches = 0;
   let importedMarkets = 0;
   let updatedMarkets = 0;
   const now = new Date();
+  const prismaProvider = toPrismaProvider(provider);
 
-  for (const normalized of matches) {
+  for (const normalized of filtered) {
     if (Number.isNaN(normalized.startTime.getTime())) continue;
 
     const winnerMult = extractWinnerMultipliers(normalized);
@@ -56,25 +123,23 @@ export async function syncNormalizedMatches(
       byExternalId.get(normalized.externalId) ??
       byTeamPair.get(teamPairKey(normalized.teamA, normalized.teamB));
 
-    const matchStatus =
-      normalized.isLive && dbMatch?.status !== MatchStatus.FINISHED
-        ? MatchStatus.LIVE
-        : dbMatch?.status ?? MatchStatus.UPCOMING;
+    const matchStatus = inferMatchStatus(normalized, dbMatch);
 
     const matchUpdateData: Record<string, unknown> = {
       startTime: normalized.startTime,
-      externalProvider: toPrismaProvider(provider),
+      externalProvider: prismaProvider,
       oddsApiId: normalized.externalId,
+      status: matchStatus,
     };
     if (winnerMult.multiplierTeamA !== undefined) matchUpdateData.multiplierTeamA = winnerMult.multiplierTeamA;
     if (winnerMult.multiplierDraw !== undefined) matchUpdateData.multiplierDraw = winnerMult.multiplierDraw;
     if (winnerMult.multiplierTeamB !== undefined) matchUpdateData.multiplierTeamB = winnerMult.multiplierTeamB;
-    if (normalized.isLive && dbMatch?.status !== MatchStatus.FINISHED) {
-      matchUpdateData.status = MatchStatus.LIVE;
-    }
+
+    const shouldUpdateMatch = mode === "all" || mode === "matches";
+    const shouldUpdateOdds = mode === "all" || mode === "odds";
 
     if (dbMatch) {
-      if (dbMatch.status !== MatchStatus.FINISHED) {
+      if (dbMatch.status !== MatchStatus.FINISHED && shouldUpdateMatch) {
         dbMatch = await prisma.match.update({
           where: { id: dbMatch.id },
           data: matchUpdateData,
@@ -82,14 +147,14 @@ export async function syncNormalizedMatches(
         });
         updatedMatches++;
       }
-    } else {
+    } else if (mode !== "odds") {
       dbMatch = await prisma.match.create({
         data: {
           teamA: normalized.teamA,
           teamB: normalized.teamB,
           startTime: normalized.startTime,
-          status: normalized.isLive ? MatchStatus.LIVE : MatchStatus.UPCOMING,
-          externalProvider: toPrismaProvider(provider),
+          status: matchStatus,
+          externalProvider: prismaProvider,
           oddsApiId: normalized.externalId,
           multiplierTeamA: winnerMult.multiplierTeamA ?? 1.5,
           multiplierDraw: winnerMult.multiplierDraw ?? 3.0,
@@ -100,9 +165,11 @@ export async function syncNormalizedMatches(
       byExternalId.set(normalized.externalId, dbMatch);
       byTeamPair.set(teamPairKey(normalized.teamA, normalized.teamB), dbMatch);
       importedMatches++;
+    } else {
+      continue;
     }
 
-    if (dbMatch.status === MatchStatus.FINISHED) continue;
+    if (!shouldUpdateOdds || dbMatch.status === MatchStatus.FINISHED) continue;
 
     const syncedMarketTypes = new Set(normalized.markets.map((m) => m.type));
 
@@ -119,6 +186,11 @@ export async function syncNormalizedMatches(
       }
 
       let market = dbMatch.markets.find((m) => m.type === normMarket.type);
+
+      if (market && isProtectedMarket(market, overwriteManual)) {
+        continue;
+      }
+
       if (!market) {
         market = await prisma.market.create({
           data: {
@@ -126,7 +198,7 @@ export async function syncNormalizedMatches(
             type: normMarket.type,
             label: normMarket.label,
             bookmaker: normMarket.bookmaker,
-            provider: toPrismaProvider(normMarket.provider),
+            provider: prismaProvider,
             lastSyncedAt: now,
           },
           include: { options: true },
@@ -139,7 +211,7 @@ export async function syncNormalizedMatches(
           data: {
             label: normMarket.label,
             bookmaker: normMarket.bookmaker,
-            provider: toPrismaProvider(normMarket.provider),
+            provider: prismaProvider,
             lastSyncedAt: now,
           },
         });
@@ -149,13 +221,14 @@ export async function syncNormalizedMatches(
       const existingOptions = new Map(
         market.options.map((o) => [optionDedupeKey(o.label, o.pointLine), o])
       );
-
       const syncedKeys = new Set<string>();
 
       for (const opt of normMarket.options) {
         const key = optionDedupeKey(opt.label, opt.pointLine);
         syncedKeys.add(key);
         const existing = existingOptions.get(key);
+        const syncTime = opt.sourceTimestamp ?? now;
+
         const optionData = {
           label: opt.label,
           outcomeType: opt.outcomeType,
@@ -165,13 +238,25 @@ export async function syncNormalizedMatches(
           correctScoreB: opt.correctScoreB,
           multiplier: opt.multiplier,
           externalId: opt.externalId,
-          provider: toPrismaProvider(opt.provider),
+          provider: prismaProvider,
           bookmaker: opt.bookmaker,
-          sourceSyncedAt: opt.sourceTimestamp ?? now,
+          sourceSyncedAt: syncTime,
+          lastSyncedAt: now,
+          isStale: false,
           status: toPrismaStatus(opt.status),
         };
 
         if (existing) {
+          if (existing.provider !== prismaProvider && PROTECTED_PROVIDERS.includes(existing.provider)) {
+            continue;
+          }
+          await logMultiplierChange(
+            existing.id,
+            existing.multiplier,
+            opt.multiplier,
+            prismaProvider,
+            "API sync"
+          );
           await prisma.marketOption.update({
             where: { id: existing.id },
             data: optionData,
@@ -184,14 +269,18 @@ export async function syncNormalizedMatches(
       }
 
       for (const [key, existing] of existingOptions) {
-        if (!syncedKeys.has(key) && existing.provider === toPrismaProvider(provider)) {
+        if (!syncedKeys.has(key) && existing.provider === prismaProvider) {
           await prisma.marketOption.update({
             where: { id: existing.id },
-            data: { status: OptionStatus.CLOSED },
+            data: { status: OptionStatus.CLOSED, isStale: false },
           });
         }
       }
     }
+  }
+
+  if (mode !== "matches") {
+    await markStaleApiOptions();
   }
 
   await prisma.appSettings.upsert({
@@ -209,4 +298,50 @@ export async function syncNormalizedMatches(
     missingMarkets: Array.from(missingMarketsSet),
     lastSyncedAt: now.toISOString(),
   };
+}
+
+export async function markStaleApiOptions() {
+  const apiOptions = await prisma.marketOption.findMany({
+    where: {
+      provider: { in: [OddsProvider.THEODDSAPI, OddsProvider.SPORTSGAMEODDS] },
+      status: OptionStatus.ACTIVE,
+    },
+    include: { market: { include: { match: true } } },
+  });
+
+  for (const opt of apiOptions) {
+    const stale = isOptionStale(opt, opt.market.match.status);
+    if (opt.isStale !== stale) {
+      await prisma.marketOption.update({
+        where: { id: opt.id },
+        data: { isStale: stale },
+      });
+    }
+  }
+}
+
+export async function suspendAllMatchMarkets(matchId: string) {
+  await prisma.marketOption.updateMany({
+    where: { market: { matchId }, status: OptionStatus.ACTIVE },
+    data: { status: OptionStatus.SUSPENDED },
+  });
+}
+
+export async function closeAllMatchMarkets(matchId: string) {
+  await prisma.marketOption.updateMany({
+    where: { market: { matchId }, status: { in: [OptionStatus.ACTIVE, OptionStatus.SUSPENDED] } },
+    data: { status: OptionStatus.CLOSED },
+  });
+}
+
+export async function reopenAllMatchMarkets(matchId: string) {
+  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!match) throw new Error("Match not found");
+  if (match.status !== MatchStatus.UPCOMING) {
+    throw new Error("Can only reopen markets before kickoff");
+  }
+  await prisma.marketOption.updateMany({
+    where: { market: { matchId }, status: OptionStatus.SUSPENDED },
+    data: { status: OptionStatus.ACTIVE },
+  });
 }

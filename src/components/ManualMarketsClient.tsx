@@ -10,6 +10,7 @@ import {
 import { MANUAL_MARKET_TYPES } from "@/lib/markets";
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
+import { AdminSyncButtons } from "./AdminSyncButtons";
 
 type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -238,6 +239,11 @@ export function ManualMarketsClient({
             ))
           )}
         </select>
+        {matchId && (
+          <div className="mt-4">
+            <AdminSyncButtons matchId={matchId} onSynced={refresh} compact />
+          </div>
+        )}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">

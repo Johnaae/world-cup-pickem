@@ -37,6 +37,18 @@ export async function PUT(request: Request, context: RouteContext) {
       throw new Error("Market is settled — cannot edit options");
     }
 
+    if (data.multiplier !== undefined && data.multiplier !== existing.multiplier) {
+      await prisma.oddsHistory.create({
+        data: {
+          marketOptionId: id,
+          oldMultiplier: existing.multiplier,
+          newMultiplier: data.multiplier,
+          source: existing.provider,
+          note: "Admin edit",
+        },
+      });
+    }
+
     const option = await prisma.marketOption.update({
       where: { id },
       data: {

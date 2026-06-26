@@ -47,7 +47,7 @@ export function translateError(
     "Forbidden": "FORBIDDEN",
     "Insufficient points": "INSUFFICIENT_POINTS",
     "Match has already started": "MATCH_LOCKED",
-    "This market option is not available": "OPTION_UNAVAILABLE",
+    "This market option is not available": "OPTION_NOT_ACTIVE",
     "Cannot edit a resolved pick": "PICK_RESOLVED",
     "Failed to sync matches and multipliers.": "SYNC_FAILED",
     "Option not found": "OPTION_NOT_FOUND",
@@ -55,6 +55,9 @@ export function translateError(
     "Cannot delete option with pending picks — suspend or close instead": "DELETE_HAS_PICKS",
     "MAX_MATCH_POINTS_EXCEEDED": "MAX_MATCH_POINTS_EXCEEDED",
     "Account is locked": "ACCOUNT_LOCKED",
+    "ODDS_STALE_LIVE": "ODDS_STALE_LIVE",
+    "ODDS_STALE_UPCOMING": "ODDS_STALE_UPCOMING",
+    "OPTION_NOT_ACTIVE": "OPTION_NOT_ACTIVE",
   };
 
   const key = keyMap[error];
