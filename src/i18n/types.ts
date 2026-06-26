@@ -16,6 +16,7 @@ export type Dictionary = {
     manualMarkets: string;
     importImageMarkets: string;
     settlement: string;
+    manageUsers: string;
     settings: string;
     login: string;
     logout: string;
@@ -89,6 +90,8 @@ export type Dictionary = {
     manualSource: string;
     advancedSettlementHint: string;
     notAvailable: string;
+    maxMatchPointsExceeded: string;
+    matchLimitRemaining: string;
   };
   pickTabs: {
     winner: string;
@@ -348,4 +351,30 @@ export type Dictionary = {
     never: string;
   };
   errors: Record<string, string>;
+  adminUsers: {
+    title: string;
+    subtitle: string;
+    name: string;
+    points: string;
+    wins: string;
+    losses: string;
+    pickCount: string;
+    status: string;
+    active: string;
+    locked: string;
+    addPoints: string;
+    subtractPoints: string;
+    resetPoints: string;
+    resetPassword: string;
+    lockAccount: string;
+    unlockAccount: string;
+    enterPoints: string;
+    confirm: string;
+    newPassword: string;
+    passwordResetSuccess: string;
+    pointsAdjusted: string;
+    pointsReset: string;
+    accountLocked: string;
+    accountUnlocked: string;
+  };
 };

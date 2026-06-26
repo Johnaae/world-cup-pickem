@@ -53,6 +53,8 @@ export function translateError(
     "Option not found": "OPTION_NOT_FOUND",
     "Market is settled — cannot edit options": "MARKET_SETTLED",
     "Cannot delete option with pending picks — suspend or close instead": "DELETE_HAS_PICKS",
+    "MAX_MATCH_POINTS_EXCEEDED": "MAX_MATCH_POINTS_EXCEEDED",
+    "Account is locked": "ACCOUNT_LOCKED",
   };
 
   const key = keyMap[error];

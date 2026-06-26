@@ -85,6 +85,7 @@ model User {
   passwordHash String
   role         Role                @default(USER)
   points       Int                 @default(1000)
+  locked       Boolean             @default(false)
   createdAt    DateTime            @default(now())
   picks        Pick[]
   transactions PointsTransaction[]

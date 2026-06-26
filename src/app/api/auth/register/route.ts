@@ -80,6 +80,9 @@ export async function PUT(request: Request) {
     if (!user || !(await verifyPassword(data.password, user.passwordHash))) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
+    if (user.locked) {
+      return NextResponse.json({ error: "Account is locked" }, { status: 403 });
+    }
 
     await setSessionCookie({
       id: user.id,

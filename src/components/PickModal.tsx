@@ -6,6 +6,7 @@ import type { Match, Market, MarketOption, Pick } from "@prisma/client";
 import { PICK_TABS, TAB_MARKET_TYPES, type PickTab, type MarketType } from "@/lib/markets";
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
+import { MAX_POINTS_PER_MATCH } from "@/lib/constants";
 
 export type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -73,6 +74,18 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
 
   const multiplier = selectedOption?.multiplier ?? 0;
   const potentialProfit = Math.round(pointsRisked * multiplier);
+
+  const maxForThisPick = useMemo(() => {
+    let otherRisk = 0;
+    for (const p of userPicks) {
+      if (p.status !== "PENDING") continue;
+      if (selectedOption && p.marketId === selectedOption.market.id) continue;
+      otherRisk += p.pointsRisked;
+    }
+    return MAX_POINTS_PER_MATCH - otherRisk;
+  }, [userPicks, selectedOption?.market.id]);
+
+  const exceedsMatchLimit = pointsRisked > maxForThisPick;
   const showManualHint = activeMarkets.some(
     (m) => m.provider === "MANUAL" || m.provider === "AI_IMAGE" || m.bookmaker === "Manual"
   );
@@ -215,12 +228,12 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                       <button
                         key={preset}
                         type="button"
-                        disabled={preset > userPoints}
+                        disabled={preset > maxForThisPick}
                         onClick={() => {
                           setUseCustom(false);
                           setAmount(preset);
                         }}
-                        className={`amount-btn ${!useCustom && amount === preset ? "amount-btn-active" : ""} ${preset > userPoints ? "opacity-40" : ""}`}
+                        className={`amount-btn ${!useCustom && amount === preset ? "amount-btn-active" : ""} ${preset > maxForThisPick ? "opacity-40" : ""}`}
                       >
                         {preset}
                       </button>
@@ -237,12 +250,19 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                     <input
                       type="number"
                       min={1}
-                      max={userPoints}
+                      max={maxForThisPick}
                       value={customAmount}
                       onChange={(e) => setCustomAmount(e.target.value)}
-                      placeholder={fmt(t.pick.maxPoints, { max: userPoints })}
+                      placeholder={fmt(t.pick.maxPoints, { max: maxForThisPick })}
                       className="input mt-2"
                     />
+                  )}
+                  {selectedOption && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      {fmt(t.pick.matchLimitRemaining, {
+                        remaining: Math.max(0, maxForThisPick - pointsRisked),
+                      })}
+                    </p>
                   )}
                 </div>
 
@@ -266,10 +286,18 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                 )}
 
                 {error && <p className="text-red-400 text-sm">{error}</p>}
+                {exceedsMatchLimit && !error && (
+                  <p className="text-red-400 text-sm">{t.pick.maxMatchPointsExceeded}</p>
+                )}
 
                 <button
                   type="submit"
-                  disabled={loading || !selectedOptionId || pointsRisked < 1 || pointsRisked > userPoints}
+                  disabled={
+                    loading ||
+                    !selectedOptionId ||
+                    pointsRisked < 1 ||
+                    exceedsMatchLimit
+                  }
                   className="btn-primary w-full"
                 >
                   {loading

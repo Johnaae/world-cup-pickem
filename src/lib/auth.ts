@@ -69,8 +69,9 @@ export async function getSession(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, getSecret());
     const user = await prisma.user.findUnique({
       where: { id: payload.id as string },
-      select: { id: true, name: true, email: true, role: true, points: true },
+      select: { id: true, name: true, email: true, role: true, points: true, locked: true },
     });
+    if (!user || user.locked) return null;
     return user;
   } catch {
     return null;

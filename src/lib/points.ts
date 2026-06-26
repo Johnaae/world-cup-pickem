@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "./prisma";
 import { canAutoSettle, getMatchResultOutcome, isOptionWinner, requiresManualSettlement } from "./markets";
+import { MAX_POINTS_PER_MATCH } from "./constants";
 
 export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   const profit = Math.round(pointsRisked * multiplier);
@@ -51,6 +52,30 @@ async function addTransaction(
   return user.points;
 }
 
+async function sumPendingMatchRisk(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  userId: string,
+  matchId: string,
+  excludePickId?: string
+) {
+  const picks = await tx.pick.findMany({
+    where: {
+      userId,
+      matchId,
+      status: PickStatus.PENDING,
+      ...(excludePickId ? { id: { not: excludePickId } } : {}),
+    },
+    select: { pointsRisked: true },
+  });
+  return picks.reduce((sum, p) => sum + p.pointsRisked, 0);
+}
+
+function assertMatchPointsLimit(currentOtherRisk: number, pointsRisked: number) {
+  if (currentOtherRisk + pointsRisked > MAX_POINTS_PER_MATCH) {
+    throw new Error("MAX_MATCH_POINTS_EXCEEDED");
+  }
+}
+
 export async function createOrUpdatePick(params: {
   userId: string;
   marketOptionId: string;
@@ -66,6 +91,10 @@ export async function createOrUpdatePick(params: {
 
   const match = option.market.match;
   if (isMatchLocked(match)) throw new Error("Match has already started");
+
+  const userCheck = await prisma.user.findUnique({ where: { id: params.userId } });
+  if (!userCheck) throw new Error("User not found");
+  if (userCheck.locked) throw new Error("Account is locked");
 
   const multiplier = option.multiplier;
   const marketId = option.marketId;
@@ -85,8 +114,10 @@ export async function createOrUpdatePick(params: {
       }
 
       const pointsDiff = params.pointsRisked - existingPick.pointsRisked;
-      if (pointsDiff > 0 && user.points < pointsDiff) {
-        throw new Error("Insufficient points");
+
+      if (pointsDiff > 0) {
+        const otherRisk = await sumPendingMatchRisk(tx, params.userId, match.id, existingPick.id);
+        assertMatchPointsLimit(otherRisk, params.pointsRisked);
       }
 
       if (pointsDiff !== 0) {
@@ -110,9 +141,8 @@ export async function createOrUpdatePick(params: {
       });
     }
 
-    if (user.points < params.pointsRisked) {
-      throw new Error("Insufficient points");
-    }
+    const otherRisk = await sumPendingMatchRisk(tx, params.userId, match.id);
+    assertMatchPointsLimit(otherRisk, params.pointsRisked);
 
     const pick = await tx.pick.create({
       data: {
