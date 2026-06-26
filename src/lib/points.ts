@@ -5,31 +5,11 @@ import {
   TransactionType,
   type Match,
   type Pick as UserPick,
+  type MarketOption,
+  type Market,
 } from "@prisma/client";
 import { prisma } from "./prisma";
-
-export function getMultiplierForOutcome(
-  match: Pick<Match, "multiplierTeamA" | "multiplierDraw" | "multiplierTeamB">,
-  outcome: PickOutcome
-): number {
-  switch (outcome) {
-    case "TEAM_A":
-      return match.multiplierTeamA;
-    case "DRAW":
-      return match.multiplierDraw;
-    case "TEAM_B":
-      return match.multiplierTeamB;
-  }
-}
-
-export function getMatchResultOutcome(
-  scoreA: number,
-  scoreB: number
-): PickOutcome {
-  if (scoreA > scoreB) return "TEAM_A";
-  if (scoreA < scoreB) return "TEAM_B";
-  return "DRAW";
-}
+import { canAutoSettle, getMatchResultOutcome, isOptionWinner } from "./markets";
 
 export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   const profit = Math.round(pointsRisked * multiplier);
@@ -73,28 +53,33 @@ async function addTransaction(
 
 export async function createOrUpdatePick(params: {
   userId: string;
-  matchId: string;
-  outcome: PickOutcome;
+  marketOptionId: string;
   pointsRisked: number;
 }) {
-  const match = await prisma.match.findUnique({ where: { id: params.matchId } });
-  if (!match) throw new Error("Match not found");
+  const option = await prisma.marketOption.findUnique({
+    where: { id: params.marketOptionId },
+    include: { market: { include: { match: true } } },
+  });
+
+  if (!option) throw new Error("Market option not found");
+
+  const match = option.market.match;
   if (isMatchLocked(match)) throw new Error("Match has already started");
 
-  const multiplier = getMultiplierForOutcome(match, params.outcome);
+  const multiplier = option.multiplier;
+  const marketId = option.marketId;
+  const selectedOutcome = legacyOutcomeFromOption(option, match);
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: params.userId } });
     if (!user) throw new Error("User not found");
 
     const existingPick = await tx.pick.findUnique({
-      where: {
-        userId_matchId: { userId: params.userId, matchId: params.matchId },
-      },
+      where: { userId_marketId: { userId: params.userId, marketId } },
     });
 
     if (existingPick) {
-      if (existingPick.status !== "PENDING") {
+      if (existingPick.status !== PickStatus.PENDING) {
         throw new Error("Cannot edit a resolved pick");
       }
 
@@ -104,29 +89,20 @@ export async function createOrUpdatePick(params: {
       }
 
       if (pointsDiff !== 0) {
-        if (pointsDiff > 0) {
-          await addTransaction(tx, {
-            userId: params.userId,
-            pickId: existingPick.id,
-            type: TransactionType.RISK,
-            amount: -pointsDiff,
-            note: `Increased risk on pick`,
-          });
-        } else {
-          await addTransaction(tx, {
-            userId: params.userId,
-            pickId: existingPick.id,
-            type: TransactionType.REFUND,
-            amount: -pointsDiff,
-            note: `Reduced risk on pick`,
-          });
-        }
+        await addTransaction(tx, {
+          userId: params.userId,
+          pickId: existingPick.id,
+          type: pointsDiff > 0 ? TransactionType.RISK : TransactionType.REFUND,
+          amount: -pointsDiff,
+          note: pointsDiff > 0 ? "Increased risk on pick" : "Reduced risk on pick",
+        });
       }
 
       return tx.pick.update({
         where: { id: existingPick.id },
         data: {
-          selectedOutcome: params.outcome,
+          marketOptionId: option.id,
+          selectedOutcome,
           pointsRisked: params.pointsRisked,
           multiplier,
         },
@@ -140,8 +116,10 @@ export async function createOrUpdatePick(params: {
     const pick = await tx.pick.create({
       data: {
         userId: params.userId,
-        matchId: params.matchId,
-        selectedOutcome: params.outcome,
+        matchId: match.id,
+        marketId,
+        marketOptionId: option.id,
+        selectedOutcome,
         pointsRisked: params.pointsRisked,
         multiplier,
         status: PickStatus.PENDING,
@@ -153,11 +131,23 @@ export async function createOrUpdatePick(params: {
       pickId: pick.id,
       type: TransactionType.RISK,
       amount: -params.pointsRisked,
-      note: `Risked on ${match.teamA} vs ${match.teamB}`,
+      note: `Pick on ${match.teamA} vs ${match.teamB} — ${option.market.label}`,
     });
 
     return pick;
   });
+}
+
+function legacyOutcomeFromOption(
+  option: MarketOption,
+  match: Match
+): PickOutcome | null {
+  if (option.outcomeType === "TEAM_A" || option.outcomeType === "TEAM_B" || option.outcomeType === "DRAW") {
+    return option.outcomeType as PickOutcome;
+  }
+  if (option.outcomeType === "OVER" || option.outcomeType === "UNDER") return null;
+  if (option.outcomeType === "CORRECT_SCORE") return null;
+  return null;
 }
 
 async function reversePickResolution(
@@ -181,59 +171,90 @@ async function reversePickResolution(
   });
 }
 
-async function resolvePick(
+async function resolvePickAsWin(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
-  pick: UserPick,
-  winningOutcome: PickOutcome
+  pick: UserPick
 ) {
-  if (pick.selectedOutcome === winningOutcome) {
-    const { profit, totalReturn } = calculateWinAmount(
-      pick.pointsRisked,
-      pick.multiplier
-    );
-    await addTransaction(tx, {
+  const { profit, totalReturn } = calculateWinAmount(pick.pointsRisked, pick.multiplier);
+  await addTransaction(tx, {
+    userId: pick.userId,
+    pickId: pick.id,
+    type: TransactionType.WIN,
+    amount: totalReturn,
+    note: `Won pick (+${profit} profit)`,
+  });
+  await tx.pick.update({
+    where: { id: pick.id },
+    data: { status: PickStatus.WON, pointsWon: profit },
+  });
+}
+
+async function resolvePickAsLoss(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  pick: UserPick
+) {
+  await tx.pointsTransaction.create({
+    data: {
       userId: pick.userId,
       pickId: pick.id,
-      type: TransactionType.WIN,
-      amount: totalReturn,
-      note: `Won pick (+${profit} profit)`,
-    });
-    await tx.pick.update({
-      where: { id: pick.id },
-      data: { status: PickStatus.WON, pointsWon: profit },
-    });
-  } else {
-    await tx.pointsTransaction.create({
-      data: {
-        userId: pick.userId,
-        pickId: pick.id,
-        type: TransactionType.LOSS,
-        amount: 0,
-        balanceAfter: (
-          await tx.user.findUnique({ where: { id: pick.userId } })
-        )!.points,
-        note: `Lost pick (-${pick.pointsRisked} risked)`,
-      },
-    });
-    await tx.pick.update({
-      where: { id: pick.id },
-      data: { status: PickStatus.LOST, pointsWon: -pick.pointsRisked },
-    });
+      type: TransactionType.LOSS,
+      amount: 0,
+      balanceAfter: (await tx.user.findUnique({ where: { id: pick.userId } }))!.points,
+      note: `Lost pick (-${pick.pointsRisked} risked)`,
+    },
+  });
+  await tx.pick.update({
+    where: { id: pick.id },
+    data: { status: PickStatus.LOST, pointsWon: -pick.pointsRisked },
+  });
+}
+
+async function resolvePickWithOption(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  pick: UserPick & { marketOption: MarketOption | null; market: Market | null },
+  match: Match
+) {
+  if (pick.market && pick.marketOption) {
+    const won = isOptionWinner(pick.marketOption, match, pick.market.type);
+    if (won === null) return;
+    if (won) await resolvePickAsWin(tx, pick);
+    else await resolvePickAsLoss(tx, pick);
+    return;
+  }
+
+  if (pick.selectedOutcome && match.scoreA !== null && match.scoreB !== null) {
+    const winningOutcome = getMatchResultOutcome(match.scoreA, match.scoreB);
+    if (pick.selectedOutcome === winningOutcome) await resolvePickAsWin(tx, pick);
+    else await resolvePickAsLoss(tx, pick);
   }
 }
 
-export async function settleMatch(matchId: string) {
+export async function settleMatch(
+  matchId: string,
+  scores?: { scoreHalfA?: number | null; scoreHalfB?: number | null }
+) {
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match) throw new Error("Match not found");
   if (match.scoreA === null || match.scoreB === null) {
     throw new Error("Match scores are required");
   }
 
-  const winningOutcome = getMatchResultOutcome(match.scoreA, match.scoreB);
+  const updatedMatch = await prisma.match.update({
+    where: { id: matchId },
+    data: {
+      scoreHalfA: scores?.scoreHalfA ?? match.scoreHalfA,
+      scoreHalfB: scores?.scoreHalfB ?? match.scoreHalfB,
+      status: MatchStatus.FINISHED,
+    },
+  });
 
   return prisma.$transaction(async (tx) => {
     const picks = await tx.pick.findMany({
-      where: { matchId, status: { in: [PickStatus.PENDING, PickStatus.WON, PickStatus.LOST] } },
+      where: {
+        matchId,
+        status: { in: [PickStatus.PENDING, PickStatus.WON, PickStatus.LOST] },
+      },
+      include: { market: true, marketOption: true },
     });
 
     for (const pick of picks) {
@@ -244,16 +265,28 @@ export async function settleMatch(matchId: string) {
 
     const pendingPicks = await tx.pick.findMany({
       where: { matchId, status: PickStatus.PENDING },
+      include: { market: true, marketOption: true },
     });
 
     for (const pick of pendingPicks) {
-      await resolvePick(tx, pick, winningOutcome);
+      if (pick.market && !canAutoSettle(pick.market.type, updatedMatch)) {
+        continue;
+      }
+      await resolvePickWithOption(tx, pick, updatedMatch);
+    }
+  });
+}
+
+export async function manuallySettlePick(pickId: string, status: "WON" | "LOST") {
+  return prisma.$transaction(async (tx) => {
+    const pick = await tx.pick.findUnique({ where: { id: pickId } });
+    if (!pick) throw new Error("Pick not found");
+    if (pick.status !== PickStatus.PENDING) {
+      throw new Error("Pick is already resolved");
     }
 
-    await tx.match.update({
-      where: { id: matchId },
-      data: { status: MatchStatus.FINISHED },
-    });
+    if (status === "WON") await resolvePickAsWin(tx, pick);
+    else await resolvePickAsLoss(tx, pick);
   });
 }
 
@@ -280,3 +313,20 @@ export async function resetAllUserPoints(startingPoints: number) {
     }
   });
 }
+
+// Legacy helper kept for backward-compatible code paths
+export function getMultiplierForOutcome(
+  match: Pick<Match, "multiplierTeamA" | "multiplierDraw" | "multiplierTeamB">,
+  outcome: PickOutcome
+): number {
+  switch (outcome) {
+    case "TEAM_A":
+      return match.multiplierTeamA;
+    case "DRAW":
+      return match.multiplierDraw;
+    case "TEAM_B":
+      return match.multiplierTeamB;
+  }
+}
+
+export { getMatchResultOutcome };

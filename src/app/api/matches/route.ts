@@ -11,11 +11,14 @@ export async function GET() {
   const matches = await prisma.match.findMany({
     orderBy: { startTime: "asc" },
     include: {
+      markets: {
+        include: { options: { orderBy: { multiplier: "asc" } } },
+        orderBy: { type: "asc" },
+      },
       picks: {
         where: { userId: session.id },
-        take: 1,
+        include: { market: true, marketOption: true },
       },
-      _count: { select: { picks: true } },
     },
   });
 

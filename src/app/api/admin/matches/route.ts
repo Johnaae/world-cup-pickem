@@ -24,8 +24,9 @@ export async function GET() {
     const matches = await prisma.match.findMany({
       orderBy: { startTime: "asc" },
       include: {
+        markets: { include: { options: true }, orderBy: { type: "asc" } },
         picks: {
-          include: { user: { select: { id: true, name: true, email: true } } },
+          include: { user: { select: { id: true, name: true, email: true } }, market: true, marketOption: true },
         },
       },
     });
@@ -68,7 +69,7 @@ export async function PUT(request: Request) {
   try {
     await requireAdmin();
     const body = await request.json();
-    const { id, settle, ...rest } = body;
+    const { id, settle, scoreHalfA, scoreHalfB, ...rest } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Match ID required" }, { status: 400 });
@@ -81,6 +82,8 @@ export async function PUT(request: Request) {
     if (rest.status) updateData.status = rest.status;
     if (rest.scoreA !== undefined) updateData.scoreA = rest.scoreA;
     if (rest.scoreB !== undefined) updateData.scoreB = rest.scoreB;
+    if (scoreHalfA !== undefined) updateData.scoreHalfA = scoreHalfA;
+    if (scoreHalfB !== undefined) updateData.scoreHalfB = scoreHalfB;
     if (rest.multiplierTeamA) updateData.multiplierTeamA = rest.multiplierTeamA;
     if (rest.multiplierDraw) updateData.multiplierDraw = rest.multiplierDraw;
     if (rest.multiplierTeamB) updateData.multiplierTeamB = rest.multiplierTeamB;
@@ -91,7 +94,10 @@ export async function PUT(request: Request) {
     });
 
     if (settle) {
-      await settleMatch(id);
+      await settleMatch(id, {
+        scoreHalfA: scoreHalfA ?? undefined,
+        scoreHalfB: scoreHalfB ?? undefined,
+      });
     }
 
     return NextResponse.json({ match });

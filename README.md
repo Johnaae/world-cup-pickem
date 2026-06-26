@@ -10,7 +10,8 @@ A private, friends-only World Cup prediction game with **virtual points only**. 
 - Multiplier-based point rewards
 - Live leaderboard with stats
 - Admin panel to manage matches, enter scores, and recalculate
-- Admin sync for upcoming matches and multipliers (The Odds API)
+- Multi-market picks: Winner, Handicap, Total Goals, 1st Half, Correct Score
+- Admin sync for all markets via The Odds API
 - CSV leaderboard export
 - Mobile-friendly dark sports UI
 
@@ -103,16 +104,22 @@ Add your [The Odds API](https://the-odds-api.com/) key to `.env`:
 ODDS_API_KEY=your_key_here
 ODDS_API_SPORT_KEY=soccer_fifa_world_cup
 ODDS_API_REGION=us
-ODDS_API_MARKET=h2h
+ODDS_API_MARKETS=h2h,spreads,totals,h2h_h1,spreads_h1,totals_h1,correct_score
 ```
 
-In the admin panel, click **Sync Matches & Multipliers** to:
+In the admin panel, click **Sync All Markets** to import matches and all available market multipliers. Missing markets are skipped gracefully — they show as "Not available" in the pick modal.
 
-- Import upcoming World Cup matches
-- Update multipliers and kickoff times for existing matches
-- Skip finished matches (scores are never overwritten)
+### Markets
 
-Decimal prices from the feed are converted to profit multipliers (`decimal price - 1`). Team names are matched safely to avoid duplicates.
+| Market | Auto-settlement |
+|--------|-----------------|
+| Winner (1X2) | Yes — from full-time score |
+| Handicap / Spread | Yes — from full-time score |
+| Total Goals | Yes — from full-time score |
+| Correct Score | Yes — from full-time score |
+| First Half Winner / Handicap / Totals | Yes if half-time scores entered; otherwise admin manual settle |
+
+One pick per user per market per match. Points are deducted immediately on confirm.
 
 ## Scripts
 

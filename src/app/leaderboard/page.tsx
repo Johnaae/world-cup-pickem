@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { Navbar } from "@/components/Navbar";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/LeaderboardTable";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeaderboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");

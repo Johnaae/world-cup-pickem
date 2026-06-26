@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import type { Match, Pick } from "@prisma/client";
 import { MatchCard } from "./MatchCard";
-import { PickModal } from "./PickModal";
+import { PickModal, type MatchWithMarkets } from "./PickModal";
 
 type MatchesClientProps = {
-  initialMatches: (Match & { picks: Pick[] })[];
+  initialMatches: MatchWithMarkets[];
   userPoints: number;
 };
 
 export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps) {
   const [matches, setMatches] = useState(initialMatches);
-  const [selectedMatch, setSelectedMatch] = useState<(Match & { picks: Pick[] }) | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<MatchWithMarkets | null>(null);
   const [points, setPoints] = useState(userPoints);
 
   async function refresh() {
@@ -36,11 +35,7 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {upcoming.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                onPick={() => setSelectedMatch(match)}
-              />
+              <MatchCard key={match.id} match={match} onPick={() => setSelectedMatch(match)} />
             ))}
           </div>
         )}
@@ -53,11 +48,7 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {finished.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                showPickButton={false}
-              />
+              <MatchCard key={match.id} match={match} showPickButton={false} />
             ))}
           </div>
         )}
@@ -67,7 +58,7 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         <PickModal
           match={selectedMatch}
           userPoints={points}
-          existingPick={selectedMatch.picks[0]}
+          userPicks={selectedMatch.picks ?? []}
           onClose={() => setSelectedMatch(null)}
           onSuccess={refresh}
         />

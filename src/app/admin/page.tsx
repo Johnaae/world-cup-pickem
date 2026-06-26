@@ -5,6 +5,8 @@ import { getAppSettings } from "@/lib/settings";
 import { Navbar } from "@/components/Navbar";
 import { AdminClient } from "@/components/AdminClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPage() {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -14,8 +16,13 @@ export default async function AdminPage() {
     prisma.match.findMany({
       orderBy: { startTime: "asc" },
       include: {
+        markets: { include: { options: true }, orderBy: { type: "asc" } },
         picks: {
-          include: { user: { select: { id: true, name: true, email: true } } },
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+            market: true,
+            marketOption: true,
+          },
         },
       },
     }),

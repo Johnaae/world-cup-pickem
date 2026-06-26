@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { Navbar } from "@/components/Navbar";
 import { MatchCard } from "@/components/MatchCard";
 import { LeaderboardTable, type LeaderboardEntry } from "@/components/LeaderboardTable";
+import { MARKET_TYPE_LABELS, type MarketType } from "@/lib/markets";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -15,9 +18,9 @@ export default async function DashboardPage() {
     where: { id: session.id },
     include: {
       picks: {
-        include: { match: true },
+        include: { match: true, market: true, marketOption: true },
         orderBy: { createdAt: "desc" },
-        take: 5,
+        take: 8,
       },
     },
   });
@@ -27,7 +30,8 @@ export default async function DashboardPage() {
     orderBy: { startTime: "asc" },
     take: 4,
     include: {
-      picks: { where: { userId: session.id }, take: 1 },
+      markets: { include: { options: true } },
+      picks: { where: { userId: session.id }, include: { market: true, marketOption: true } },
     },
   });
 
@@ -36,7 +40,8 @@ export default async function DashboardPage() {
     orderBy: { startTime: "desc" },
     take: 3,
     include: {
-      picks: { where: { userId: session.id }, take: 1 },
+      markets: { include: { options: true } },
+      picks: { where: { userId: session.id }, include: { market: true, marketOption: true } },
     },
   });
 
@@ -113,7 +118,17 @@ export default async function DashboardPage() {
                       {pick.match.teamA} vs {pick.match.teamB}
                     </p>
                     <p className="text-sm text-amber-400 mt-1">
-                      {pick.selectedOutcome === "TEAM_A" ? pick.match.teamA : pick.selectedOutcome === "TEAM_B" ? pick.match.teamB : "Draw"} · {pick.pointsRisked} pts
+                      {pick.market
+                        ? MARKET_TYPE_LABELS[pick.market.type as MarketType]
+                        : "Pick"}
+                      {" · "}
+                      {pick.marketOption?.label ??
+                        (pick.selectedOutcome === "TEAM_A"
+                          ? pick.match.teamA
+                          : pick.selectedOutcome === "TEAM_B"
+                            ? pick.match.teamB
+                            : "Draw")}{" "}
+                      · {pick.pointsRisked} pts
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
                       {format(new Date(pick.match.startTime), "PPp")}

@@ -3,11 +3,9 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createOrUpdatePick } from "@/lib/points";
-import { PickOutcome } from "@prisma/client";
 
 const pickSchema = z.object({
-  matchId: z.string(),
-  outcome: z.enum(["TEAM_A", "DRAW", "TEAM_B"]),
+  marketOptionId: z.string(),
   pointsRisked: z.number().int().positive(),
 });
 
@@ -23,8 +21,7 @@ export async function POST(request: Request) {
 
     const pick = await createOrUpdatePick({
       userId: session.id,
-      matchId: data.matchId,
-      outcome: data.outcome as PickOutcome,
+      marketOptionId: data.marketOptionId,
       pointsRisked: data.pointsRisked,
     });
 
@@ -53,7 +50,11 @@ export async function GET(request: Request) {
       userId: session.id,
       ...(matchId ? { matchId } : {}),
     },
-    include: { match: true },
+    include: {
+      match: true,
+      market: true,
+      marketOption: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 
