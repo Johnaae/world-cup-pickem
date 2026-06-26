@@ -22,21 +22,47 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
   const [matches, setMatches] = useState(initialMatches);
   const [selectedMatch, setSelectedMatch] = useState<MatchWithMarkets | null>(null);
   const [points, setPoints] = useState(userPoints);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [lastManualRefreshAt, setLastManualRefreshAt] = useState<Date | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [pageError, setPageError] = useState("");
 
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/matches");
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.matches) setMatches(data.matches);
-    setLastRefreshedAt(new Date());
-    const sessionRes = await fetch("/api/auth/session");
-    if (sessionRes.ok) {
-      const sessionData = await sessionRes.json();
-      if (sessionData.user) setPoints(sessionData.user.points);
+  const reloadMatches = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/matches");
+      let data: { ok?: boolean; matches?: MatchWithMarkets[]; error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        setPageError(t.common.somethingWrong);
+        return false;
+      }
+
+      if (!res.ok || data.ok === false) {
+        setPageError(data.error ? te(data.error) : t.common.failed);
+        return false;
+      }
+
+      if (data.matches) setMatches(data.matches);
+      setLastManualRefreshAt(new Date());
+      setPageError("");
+
+      try {
+        const sessionRes = await fetch("/api/auth/session");
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          if (sessionData.user) setPoints(sessionData.user.points);
+        }
+      } catch {
+        // non-fatal
+      }
+
+      return true;
+    } catch (err) {
+      console.error("[MatchesClient] reloadMatches failed:", err);
+      setPageError(err instanceof Error ? err.message : t.common.somethingWrong);
+      return false;
     }
-  }, []);
+  }, [t, te]);
 
   const refreshOddsForMatch = useCallback(
     async (matchId: string): Promise<RefreshResult> => {
@@ -59,19 +85,19 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
           return { ok: false, error: errText };
         }
 
-        await refresh();
+        await reloadMatches();
         const toastMsg = data.message ?? t.matches.oddsRefreshed;
         setToast(toastMsg);
         return { ok: true, message: toastMsg };
       } catch (err) {
-        console.error("[MatchesClient] refresh odds failed:", err);
+        console.error("[MatchesClient] refreshOddsForMatch failed:", err);
         return {
           ok: false,
           error: err instanceof Error ? err.message : t.common.somethingWrong,
         };
       }
     },
-    [refresh, t, te]
+    [reloadMatches, t, te]
   );
 
   useEffect(() => {
@@ -80,30 +106,28 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
     return () => clearTimeout(id);
   }, [toast]);
 
-  const hasLive = matches.some((m) => m.status === "LIVE");
-  const hasUpcoming = matches.some((m) => m.status === "UPCOMING");
-  const refreshInterval = hasLive ? 30_000 : hasUpcoming ? 120_000 : null;
-
-  useEffect(() => {
-    if (!refreshInterval) return;
-    const id = setInterval(refresh, refreshInterval);
-    return () => clearInterval(id);
-  }, [refreshInterval, refresh]);
-
   useEffect(() => {
     if (!selectedMatch) return;
-    const updated = matches.find((m) => m.id === selectedMatch.id);
-    if (updated) setSelectedMatch(updated);
+    try {
+      const updated = matches.find((m) => m.id === selectedMatch.id);
+      if (updated) setSelectedMatch(updated);
+    } catch (err) {
+      console.error("[MatchesClient] sync selected match failed:", err);
+    }
   }, [matches, selectedMatch?.id]);
 
   const globalLastSynced = useMemo(() => {
-    let latest: Date | null = null;
-    for (const m of matches) {
-      const allOptions = m.markets.flatMap((mk) => mk.options);
-      const synced = getMatchLastSyncedAt(allOptions);
-      if (synced && (!latest || synced > latest)) latest = synced;
+    try {
+      let latest: Date | null = null;
+      for (const m of matches) {
+        const allOptions = m.markets.flatMap((mk) => mk.options);
+        const synced = getMatchLastSyncedAt(allOptions);
+        if (synced && (!latest || synced > latest)) latest = synced;
+      }
+      return latest;
+    } catch {
+      return null;
     }
-    return latest;
   }, [matches]);
 
   const upcoming = matches.filter((m) => m.status === "UPCOMING" || m.status === "LIVE");
@@ -117,10 +141,15 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
         </div>
       )}
 
-      {(hasLive || hasUpcoming) && (
+      {pageError && (
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+          {pageError}
+        </div>
+      )}
+
+      {lastManualRefreshAt && (
         <p className="text-xs text-slate-500 mb-4">
-          {t.pick.lastUpdated}:{" "}
-          {format(lastRefreshedAt, "HH:mm:ss", { locale: dateLocale })}
+          {t.pick.lastUpdated}: {format(lastManualRefreshAt, "HH:mm:ss", { locale: dateLocale })}
           {globalLastSynced && (
             <>
               {" · "}
@@ -143,7 +172,7 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
                 isAdmin={isAdmin}
                 onPick={() => setSelectedMatch(match)}
                 onRefreshOdds={refreshOddsForMatch}
-                onScoreSaved={refresh}
+                onScoreSaved={reloadMatches}
               />
             ))}
           </div>
@@ -162,7 +191,7 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
                 match={match}
                 isAdmin={isAdmin}
                 showPickButton={false}
-                onScoreSaved={refresh}
+                onScoreSaved={reloadMatches}
               />
             ))}
           </div>
@@ -175,7 +204,7 @@ export function MatchesClient({ initialMatches, userPoints, isAdmin = false }: M
           userPoints={points}
           userPicks={selectedMatch.picks ?? []}
           onClose={() => setSelectedMatch(null)}
-          onSuccess={refresh}
+          onSuccess={reloadMatches}
         />
       )}
     </>

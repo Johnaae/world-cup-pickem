@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { OddsProviderError, syncMatchOdds, markStaleApiOptions } from "@/lib/odds";
+import { OddsProviderError, syncMatchOdds } from "@/lib/odds";
 
 const schema = z.object({
   matchId: z.string().min(1),
@@ -34,8 +34,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "MATCH_FINISHED" }, { status: 400 });
     }
 
-    await syncMatchOdds(matchId);
-    await markStaleApiOptions();
+    try {
+      await syncMatchOdds(matchId);
+    } catch (syncError) {
+      console.error("[sync-match-odds] sync failed:", syncError);
+      if (syncError instanceof OddsProviderError) {
+        const errorKey =
+          syncError.message === "API_NO_LIVE_ODDS" ? "API_NO_LIVE_ODDS" : syncError.message;
+        return NextResponse.json({ ok: false, error: errorKey });
+      }
+      throw syncError;
+    }
 
     return NextResponse.json({
       ok: true,
@@ -57,6 +66,6 @@ export async function POST(request: Request) {
       );
     }
     const message = error instanceof Error ? error.message : "Failed to refresh odds";
-    return NextResponse.json({ ok: false, error: message }, { status: 200 });
+    return NextResponse.json({ ok: false, error: message });
   }
 }
