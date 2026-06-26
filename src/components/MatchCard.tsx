@@ -1,10 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { format } from "date-fns";
 import type { Match, Market, MarketOption, Pick, MatchStatus } from "@prisma/client";
 import type { MarketType } from "@/lib/markets";
 import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
+import {
+  getMatchLastSyncedAt,
+  getMatchPickButtonState,
+  type MatchWithMarkets,
+} from "@/lib/matchPickability";
 
 type MatchCardProps = {
   match: Match & {
@@ -12,6 +18,7 @@ type MatchCardProps = {
     picks?: (Pick & { market?: Market | null; marketOption?: MarketOption | null })[];
   };
   onPick?: () => void;
+  onRefreshOdds?: (matchId: string) => Promise<void>;
   showPickButton?: boolean;
 };
 
@@ -21,12 +28,20 @@ const statusStyles: Record<MatchStatus, string> = {
   FINISHED: "badge-finished",
 };
 
-export function MatchCard({ match, onPick, showPickButton = true }: MatchCardProps) {
+export function MatchCard({ match, onPick, onRefreshOdds, showPickButton = true }: MatchCardProps) {
   const { t, locale, fmt } = useI18n();
   const picks = match.picks ?? [];
-  const locked = match.status !== "UPCOMING" || new Date(match.startTime) <= new Date();
   const marketCount = match.markets?.length ?? 0;
   const dateLocale = getDateFnsLocale(locale);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const buttonState = getMatchPickButtonState(match as MatchWithMarkets);
+  const lastOddsSync = getMatchLastSyncedAt(
+    (match.markets ?? []).flatMap((m) => m.options)
+  );
+
+  const showLiveScore = match.status === "LIVE" || match.status === "FINISHED";
+  const hasScore = match.scoreA !== null && match.scoreB !== null;
 
   function marketLabel(type: MarketType) {
     return t.markets[type];
@@ -38,6 +53,45 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
     if (pick.selectedOutcome === "TEAM_B") return match.teamB;
     if (pick.selectedOutcome === "DRAW") return t.outcomes.draw;
     return t.common.na;
+  }
+
+  function buttonLabel(): string {
+    if (picks.length > 0 && (buttonState === "pick" || buttonState === "pickLive")) {
+      return t.matches.makeEditPicks;
+    }
+    switch (buttonState) {
+      case "finished":
+        return t.matches.finished;
+      case "pick":
+        return t.matches.makePick;
+      case "pickLive":
+        return t.matches.makeLivePick;
+      case "refreshOdds":
+        return t.matches.refreshOdds;
+      case "locked":
+      default:
+        return t.matches.locked;
+    }
+  }
+
+  const buttonDisabled =
+    buttonState === "finished" ||
+    buttonState === "locked" ||
+    refreshing;
+
+  async function handleButtonClick() {
+    if (buttonState === "refreshOdds" && onRefreshOdds) {
+      setRefreshing(true);
+      try {
+        await onRefreshOdds(match.id);
+      } finally {
+        setRefreshing(false);
+      }
+      return;
+    }
+    if (buttonState === "pick" || buttonState === "pickLive") {
+      onPick?.();
+    }
   }
 
   return (
@@ -54,18 +108,31 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 text-center">
           <p className="font-bold text-lg text-white">{match.teamA}</p>
-          {match.status === "FINISHED" && match.scoreA !== null && (
+          {showLiveScore && hasScore && (
             <p className="text-3xl font-black text-emerald-400 mt-1">{match.scoreA}</p>
           )}
         </div>
         <div className="text-slate-500 font-bold">{t.matches.vs}</div>
         <div className="flex-1 text-center">
           <p className="font-bold text-lg text-white">{match.teamB}</p>
-          {match.status === "FINISHED" && match.scoreB !== null && (
+          {showLiveScore && hasScore && (
             <p className="text-3xl font-black text-emerald-400 mt-1">{match.scoreB}</p>
           )}
         </div>
       </div>
+
+      {showLiveScore && (
+        <p className="text-xs text-slate-400 mt-2 text-center">
+          {t.matches.score}:{" "}
+          {hasScore ? `${match.scoreA} - ${match.scoreB}` : t.matches.scoreUnavailable}
+        </p>
+      )}
+
+      {match.status === "LIVE" && lastOddsSync && (
+        <p className="text-xs text-slate-500 mt-2 text-center">
+          {t.matches.oddsLastUpdated}: {format(lastOddsSync, "HH:mm:ss", { locale: dateLocale })}
+        </p>
+      )}
 
       {marketCount > 0 && (
         <p className="text-xs text-slate-500 mt-3">
@@ -115,20 +182,38 @@ export function MatchCard({ match, onPick, showPickButton = true }: MatchCardPro
         </div>
       )}
 
-      {showPickButton && onPick && (
-        <button
-          onClick={onPick}
-          className={`mt-4 w-full ${locked && picks.length === 0 ? "btn-secondary opacity-50 cursor-not-allowed" : "btn-primary"}`}
-          disabled={locked && picks.length === 0}
-        >
-          {picks.length > 0
-            ? locked
-              ? t.matches.picksLocked
-              : t.matches.makeEditPicks
-            : locked
-              ? t.matches.locked
-              : t.matches.makePick}
-        </button>
+      {showPickButton && (onPick || onRefreshOdds) && (
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={handleButtonClick}
+            className={`flex-1 ${
+              buttonDisabled && buttonState !== "refreshOdds"
+                ? "btn-secondary opacity-50 cursor-not-allowed"
+                : buttonState === "refreshOdds"
+                  ? "btn-primary"
+                  : "btn-primary"
+            }`}
+            disabled={buttonDisabled}
+          >
+            {refreshing ? t.common.loading : buttonLabel()}
+          </button>
+          {match.status === "LIVE" && onRefreshOdds && buttonState !== "refreshOdds" && (
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  await onRefreshOdds(match.id);
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              className="btn-secondary shrink-0"
+            >
+              {refreshing ? "…" : t.matches.refresh}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

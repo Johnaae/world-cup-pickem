@@ -47,12 +47,23 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
     if (updated) setSelectedMatch(updated);
   }, [matches, selectedMatch?.id]);
 
+  const refreshOddsForMatch = useCallback(async (matchId: string) => {
+    const res = await fetch("/api/matches/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Refresh failed");
+    await refresh();
+  }, [refresh]);
+
   const globalLastSynced = useMemo(() => {
     let latest: Date | null = null;
     for (const m of matches) {
       const allOptions = m.markets.flatMap((mk) => mk.options);
-      const t = getMatchLastSyncedAt(allOptions);
-      if (t && (!latest || t > latest)) latest = t;
+      const synced = getMatchLastSyncedAt(allOptions);
+      if (synced && (!latest || synced > latest)) latest = synced;
     }
     return latest;
   }, [matches]);
@@ -82,7 +93,12 @@ export function MatchesClient({ initialMatches, userPoints }: MatchesClientProps
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {upcoming.map((match) => (
-              <MatchCard key={match.id} match={match} onPick={() => setSelectedMatch(match)} />
+              <MatchCard
+                key={match.id}
+                match={match}
+                onPick={() => setSelectedMatch(match)}
+                onRefreshOdds={refreshOddsForMatch}
+              />
             ))}
           </div>
         )}

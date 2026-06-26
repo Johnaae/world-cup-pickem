@@ -47,6 +47,7 @@ export function translateError(
     "Forbidden": "FORBIDDEN",
     "Insufficient points": "INSUFFICIENT_POINTS",
     "Match has already started": "MATCH_LOCKED",
+    "MATCH_FINISHED": "MATCH_FINISHED",
     "This market option is not available": "OPTION_NOT_ACTIVE",
     "Cannot edit a resolved pick": "PICK_RESOLVED",
     "Failed to sync matches and multipliers.": "SYNC_FAILED",

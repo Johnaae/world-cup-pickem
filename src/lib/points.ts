@@ -12,6 +12,7 @@ import { prisma } from "./prisma";
 import { canAutoSettle, getMatchResultOutcome, isOptionWinner, requiresManualSettlement } from "./markets";
 import { MAX_POINTS_PER_MATCH } from "./constants";
 import { assertOptionFreshForPick } from "./odds/staleness";
+import { assertMatchAllowsPicks } from "./matchPickability";
 
 export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   const profit = Math.round(pointsRisked * multiplier);
@@ -19,9 +20,9 @@ export function calculateWinAmount(pointsRisked: number, multiplier: number) {
   return { profit, totalReturn };
 }
 
+/** @deprecated use isMatchClosedForPicking from matchPickability */
 export function isMatchLocked(match: Pick<Match, "startTime" | "status">) {
-  const now = new Date();
-  return match.status !== "UPCOMING" || match.startTime <= now;
+  return match.status !== MatchStatus.UPCOMING || match.startTime <= new Date();
 }
 
 async function addTransaction(
@@ -90,7 +91,7 @@ export async function createOrUpdatePick(params: {
   if (!optionPreview) throw new Error("Market option not found");
 
   const match = optionPreview.market.match;
-  if (isMatchLocked(match)) throw new Error("Match has already started");
+  assertMatchAllowsPicks(match);
 
   const userCheck = await prisma.user.findUnique({ where: { id: params.userId } });
   if (!userCheck) throw new Error("User not found");

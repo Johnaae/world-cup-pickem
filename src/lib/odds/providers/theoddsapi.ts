@@ -27,6 +27,8 @@ export type TheOddsApiEvent = {
   commence_time: string;
   home_team: string;
   away_team: string;
+  completed?: boolean;
+  scores?: Array<{ name: string; score: string }> | null;
   bookmakers: Array<{
     key: string;
     title?: string;
@@ -156,11 +158,34 @@ function extractMarketOptions(
   });
 }
 
+function parseScoresFromEvent(
+  event: TheOddsApiEvent
+): { scoreA?: number; scoreB?: number } {
+  if (!event.scores || event.scores.length === 0) return {};
+
+  const home = event.scores.find(
+    (s) => normalizeTeamName(s.name) === normalizeTeamName(event.home_team)
+  );
+  const away = event.scores.find(
+    (s) => normalizeTeamName(s.name) === normalizeTeamName(event.away_team)
+  );
+
+  const scoreA = home?.score !== undefined ? parseInt(home.score, 10) : NaN;
+  const scoreB = away?.score !== undefined ? parseInt(away.score, 10) : NaN;
+
+  const result: { scoreA?: number; scoreB?: number } = {};
+  if (!Number.isNaN(scoreA)) result.scoreA = scoreA;
+  if (!Number.isNaN(scoreB)) result.scoreB = scoreB;
+  return result;
+}
+
 export function normalizeTheOddsApiEvent(event: TheOddsApiEvent): NormalizedMatch {
   const startTime = new Date(event.commence_time);
-  const eventEnded = startTime.getTime() < Date.now() - 3 * 60 * 60 * 1000;
+  const eventEnded =
+    event.completed === true || startTime.getTime() < Date.now() - 3 * 60 * 60 * 1000;
   const isLive = startTime <= new Date() && !eventEnded;
   const markets: NormalizedMarket[] = [];
+  const scores = parseScoresFromEvent(event);
 
   for (const apiKey of getRequestedApiMarkets()) {
     const marketType = API_MARKET_TO_TYPE[apiKey];
@@ -186,6 +211,7 @@ export function normalizeTheOddsApiEvent(event: TheOddsApiEvent): NormalizedMatc
     isLive,
     provider: "THEODDSAPI",
     markets,
+    ...scores,
   };
 }
 

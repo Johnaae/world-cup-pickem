@@ -134,6 +134,10 @@ export async function syncNormalizedMatches(
     if (winnerMult.multiplierTeamA !== undefined) matchUpdateData.multiplierTeamA = winnerMult.multiplierTeamA;
     if (winnerMult.multiplierDraw !== undefined) matchUpdateData.multiplierDraw = winnerMult.multiplierDraw;
     if (winnerMult.multiplierTeamB !== undefined) matchUpdateData.multiplierTeamB = winnerMult.multiplierTeamB;
+    if (normalized.scoreA !== undefined) matchUpdateData.scoreA = normalized.scoreA;
+    if (normalized.scoreB !== undefined) matchUpdateData.scoreB = normalized.scoreB;
+    if (normalized.scoreHalfA !== undefined) matchUpdateData.scoreHalfA = normalized.scoreHalfA;
+    if (normalized.scoreHalfB !== undefined) matchUpdateData.scoreHalfB = normalized.scoreHalfB;
 
     const shouldUpdateMatch = mode === "all" || mode === "matches";
     const shouldUpdateOdds = mode === "all" || mode === "odds";

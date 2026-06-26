@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n/context";
 import { getDateFnsLocale } from "@/i18n/dates";
 import { MAX_POINTS_PER_MATCH } from "@/lib/constants";
 import { isApiSourcedProvider, isOptionStale, getOptionSyncTime } from "@/lib/odds/staleness";
+import { canShowPickForm, isMatchFinished } from "@/lib/matchPickability";
 
 export type MatchWithMarkets = Match & {
   markets: (Market & { options: MarketOption[] })[];
@@ -37,7 +38,10 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
   const [error, setError] = useState("");
   const dateLocale = getDateFnsLocale(locale);
 
-  const locked = match.status !== "UPCOMING" || new Date(match.startTime) <= new Date();
+  const canPick = canShowPickForm(match);
+  const finished = isMatchFinished(match);
+  const waitingLive =
+    match.status === "UPCOMING" && new Date() >= new Date(match.startTime);
   const pointsRisked = useCustom ? parseInt(customAmount, 10) || 0 : amount;
 
   const tabMarkets = useMemo(() => {
@@ -133,10 +137,21 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
       <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold text-white">{t.pick.title}</h2>
+            <h2 className="text-xl font-bold text-white">
+              {match.status === "LIVE" ? t.pick.livePickTitle : t.pick.title}
+            </h2>
             <p className="text-slate-400 text-sm">
               {match.teamA} vs {match.teamB} ·{" "}
               {format(new Date(match.startTime), "EEE, MMM d · HH:mm", { locale: dateLocale })}
+              {match.status === "LIVE" && (
+                <>
+                  {" · "}
+                  {t.matches.score}:{" "}
+                  {match.scoreA !== null && match.scoreB !== null
+                    ? `${match.scoreA} - ${match.scoreB}`
+                    : t.matches.scoreUnavailable}
+                </>
+              )}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">
@@ -144,9 +159,13 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
           </button>
         </div>
 
-        {locked ? (
+        {!canPick ? (
           <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 text-amber-300">
-            {t.pick.lockedMessage}
+            {finished
+              ? t.pick.matchFinishedMessage
+              : waitingLive
+                ? t.pick.waitingLiveMessage
+                : t.pick.lockedMessage}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">

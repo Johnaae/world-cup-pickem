@@ -64,6 +64,13 @@ export type Dictionary = {
     makeEditPicks: string;
     picksLocked: string;
     locked: string;
+    finished: string;
+    makeLivePick: string;
+    refreshOdds: string;
+    refresh: string;
+    score: string;
+    scoreUnavailable: string;
+    oddsLastUpdated: string;
     vs: string;
   };
   matchStatus: {
@@ -86,6 +93,9 @@ export type Dictionary = {
     maxPoints: string;
     saving: string;
     lockedMessage: string;
+    livePickTitle: string;
+    waitingLiveMessage: string;
+    matchFinishedMessage: string;
     noActiveOptions: string;
     manualSource: string;
     advancedSettlementHint: string;

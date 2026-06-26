@@ -35,6 +35,10 @@ export type NormalizedMatch = {
   isLive: boolean;
   provider: OddsProviderName;
   markets: NormalizedMarket[];
+  scoreA?: number;
+  scoreB?: number;
+  scoreHalfA?: number;
+  scoreHalfB?: number;
 };
 
 export type SyncResult = {
