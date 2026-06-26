@@ -19,6 +19,9 @@ export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
   [MarketType.FIRST_HALF_WINNER]: "First Half Winner",
   [MarketType.FIRST_HALF_HANDICAP]: "First Half Handicap",
   [MarketType.FIRST_HALF_TOTAL_GOALS]: "First Half Total Goals",
+  [MarketType.SECOND_HALF_WINNER]: "Second Half Winner",
+  [MarketType.SECOND_HALF_HANDICAP]: "Second Half Handicap",
+  [MarketType.SECOND_HALF_TOTAL_GOALS]: "Second Half Total Goals",
   [MarketType.CORRECT_SCORE]: "Correct Score",
   [MarketType.BOTH_TEAMS_TO_SCORE]: "Both Teams To Score",
   [MarketType.TOTAL_CORNERS]: "Total Corners",
@@ -28,12 +31,24 @@ export const MARKET_TYPE_LABELS: Record<MarketType, string> = {
   [MarketType.LIVE_GOAL]: "Live Goal",
 };
 
-export const MANUAL_MARKET_TYPES: MarketType[] = [
-  MarketType.HANDICAP,
-  MarketType.TOTAL_GOALS,
+export const FIRST_HALF_TYPES: MarketType[] = [
   MarketType.FIRST_HALF_WINNER,
   MarketType.FIRST_HALF_HANDICAP,
   MarketType.FIRST_HALF_TOTAL_GOALS,
+];
+
+export const SECOND_HALF_TYPES: MarketType[] = [
+  MarketType.SECOND_HALF_WINNER,
+  MarketType.SECOND_HALF_HANDICAP,
+  MarketType.SECOND_HALF_TOTAL_GOALS,
+];
+
+export const MANUAL_MARKET_TYPES: MarketType[] = [
+  MarketType.WINNER,
+  MarketType.HANDICAP,
+  MarketType.TOTAL_GOALS,
+  ...FIRST_HALF_TYPES,
+  ...SECOND_HALF_TYPES,
   MarketType.CORRECT_SCORE,
   MarketType.BOTH_TEAMS_TO_SCORE,
   MarketType.TOTAL_CORNERS,
@@ -41,12 +56,6 @@ export const MANUAL_MARKET_TYPES: MarketType[] = [
   MarketType.TOTAL_CARDS,
   MarketType.NEXT_GOAL,
   MarketType.LIVE_GOAL,
-];
-
-export const FIRST_HALF_TYPES: MarketType[] = [
-  MarketType.FIRST_HALF_WINNER,
-  MarketType.FIRST_HALF_HANDICAP,
-  MarketType.FIRST_HALF_TOTAL_GOALS,
 ];
 
 export const AUTO_SETTLE_TYPES: MarketType[] = [

@@ -73,7 +73,9 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
 
   const multiplier = selectedOption?.multiplier ?? 0;
   const potentialProfit = Math.round(pointsRisked * multiplier);
-  const showManualHint = activeMarkets.some((m) => m.provider === "MANUAL" || m.bookmaker === "Manual");
+  const showManualHint = activeMarkets.some(
+    (m) => m.provider === "MANUAL" || m.provider === "AI_IMAGE" || m.bookmaker === "Manual"
+  );
   const needsManualSettlement =
     activeTab === "firstHalf" ||
     activeTab === "correctScore" ||
@@ -173,7 +175,7 @@ export function PickModal({ match, userPoints, userPicks, onClose, onSuccess }: 
                       <div key={market.id}>
                         <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">
                           {t.markets[market.type as MarketType]}
-                          {(market.provider === "MANUAL" || market.bookmaker === "Manual") && (
+                          {(market.provider === "MANUAL" || market.provider === "AI_IMAGE" || market.bookmaker === "Manual") && (
                             <span className="ml-2 normal-case text-slate-600">
                               · {t.pick.manualSource}
                             </span>

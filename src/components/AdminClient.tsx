@@ -205,6 +205,7 @@ export function AdminClient({
         </p>
         <div className="flex flex-wrap gap-3">
           <a href="/admin/manual-markets" className="btn-primary">{t.admin.manualMarketEntry}</a>
+          <a href="/admin/import-image" className="btn-primary">{t.manualMarkets.importFromImage}</a>
           <a href="/admin/manual-settlement" className="btn-secondary">{t.admin.manualSettlement}</a>
         </div>
       </div>

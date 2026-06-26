@@ -34,6 +34,7 @@ export function Navbar({ user }: NavbarProps) {
                 <>
                   <Link href="/admin" className="nav-link">{t.nav.admin}</Link>
                   <Link href="/admin/manual-markets" className="nav-link hidden lg:inline">{t.nav.manualMarkets}</Link>
+                  <Link href="/admin/import-image" className="nav-link hidden xl:inline">{t.nav.importImageMarkets}</Link>
                   <Link href="/settings" className="nav-link">{t.nav.settings}</Link>
                 </>
               )}

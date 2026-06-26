@@ -47,6 +47,9 @@ enum MarketType {
   FIRST_HALF_WINNER
   FIRST_HALF_HANDICAP
   FIRST_HALF_TOTAL_GOALS
+  SECOND_HALF_WINNER
+  SECOND_HALF_HANDICAP
+  SECOND_HALF_TOTAL_GOALS
   CORRECT_SCORE
   BOTH_TEAMS_TO_SCORE
   TOTAL_CORNERS
@@ -66,6 +69,7 @@ enum OddsProvider {
   SPORTSGAMEODDS
   THEODDSAPI
   MANUAL
+  AI_IMAGE
 }
 
 enum OptionStatus {
@@ -104,6 +108,7 @@ model Match {
   createdAt        DateTime      @default(now())
   picks            Pick[]
   markets          Market[]
+  oddsImportAudits OddsImportAudit[]
 }
 
 model Market {
@@ -192,4 +197,15 @@ model AppSettings {
   lastOddsSyncAt DateTime?
   oddsProvider   String?
   updatedAt      DateTime  @updatedAt
+}
+
+model OddsImportAudit {
+  id        String   @id @default(cuid())
+  matchId   String
+  mimeType  String
+  fileName  String?
+  imageData Bytes?
+  bookmaker String?
+  createdAt DateTime @default(now())
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 }

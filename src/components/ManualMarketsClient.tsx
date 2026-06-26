@@ -207,6 +207,10 @@ export function ManualMarketsClient({
         {t.manualMarkets.safetyNotice}
       </div>
 
+      <div className="flex flex-wrap gap-3">
+        <a href="/admin/import-image" className="btn-primary">{t.manualMarkets.importFromImage}</a>
+      </div>
+
       {message && (
         <div className={`rounded-lg border p-3 text-sm ${
           messageType === "success"
